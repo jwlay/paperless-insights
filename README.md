@@ -11,12 +11,22 @@ only in that browser's `localStorage`. Nothing is sent anywhere else.
 
 ## Features
 
-- Full document grid — sort, filter, quick search, column visibility, CSV export
+- Full document grid — sort, filter, quick search, column visibility, CSV
+  export, a manual refresh button (no full page reload needed after editing
+  something in Paperless)
+- Built-in quick views (all documents, this year, last 30 days, missing
+  amount, missing correspondent) plus **saved views**: capture the grid's
+  current column filters, sort order, and search as a named, reusable view
+  (e.g. "Tax receipts 2026", "Software subscriptions") — stored locally,
+  no server round-trip
 - Automatic detection of the "amount" custom field (by data type, not a
   hardcoded field ID), parsing currency + amount from values like `USD25.11`
+  (see [Custom field setup](#custom-field-setup-required-for-amounts) below)
 - Correspondent/tag/document type/storage path names resolved from IDs
-- A Dashboard tab: group documents by correspondent, tag, currency, year,
-  month, document type, or storage path, with totals and a bar chart
+- A Dashboard tab (charts via [Apache ECharts](https://echarts.apache.org/)):
+  monthly spending, spending by correspondent, spending by tag, currency
+  distribution, top 20 vendors, largest expenses, documents added over time,
+  and missing metadata
 - Tag pills rendered with their actual Paperless colors
 - Preserves original currencies — no forced conversion
 
@@ -52,6 +62,26 @@ plain JS file served to whoever loads the page. That's a reasonable place for
 a non-secret default (the URL), but not for an API token — baking it into a
 served file would defeat the point of it being an authentication credential.
 So the token is always entered once through the UI, per browser.
+
+### Custom field setup (required for amounts)
+
+Paperless has no built-in concept of a document "amount" — this app reads it
+from a **custom field you create yourself** in Paperless:
+
+1. In Paperless: Settings → Custom Fields → Add Field
+2. Set its **type to "Monetary"** (the name doesn't matter — call it "Total
+   Amount", "Invoice Amount", whatever you like)
+3. Populate it on your documents with the amount, e.g. `25.11 USD` — Paperless
+   stores this as a currency + number pair (`USD25.11`), which is what this
+   app parses. You can fill it in manually per document, or automate it with
+   a Paperless workflow/consumption template if you already extract amounts
+   some other way.
+
+The app detects this field **by its type** (`monetary`), not by name or a
+hardcoded ID, so renaming it is safe. If you create more than one monetary
+custom field, only the first one returned by the API is used. Documents with
+no value in this field show up in the "Missing amount" view rather than
+being silently dropped.
 
 ### Paperless-side requirements
 
@@ -130,9 +160,9 @@ src/
   api/          Paperless REST client + pagination + TanStack Query hooks
   models/       Normalized document model + custom-field amount parsing glue
   parsing/      Amount/currency parsing (auto-detects the monetary custom field)
-  components/   Shared UI (connection screen, grid, column menu)
-  grid/         AG Grid column definitions and cell renderers
-  dashboard/    Client-side grouping/aggregation + bar chart
+  components/   Shared UI (connection screen, grid, column/views menus)
+  grid/         AG Grid column definitions, cell renderers, saved-views storage
+  dashboard/    Client-side grouping/aggregation + ECharts wrapper
   pages/        Top-level pages (Dashboard)
   lib/          Local storage config, shadcn utils
 ```
@@ -140,12 +170,17 @@ src/
 ## Tech stack
 
 React, TypeScript, Vite, AG Grid Community, Tailwind CSS, shadcn/ui, TanStack
-Query. No backend, no build-time coupling to any specific Paperless instance.
+Query, Apache ECharts. No backend, no build-time coupling to any specific
+Paperless instance.
 
 ## Limitations
 
 - AG Grid Community doesn't include row grouping, pivoting, or Integrated
-  Charts (all Enterprise-only) — the Dashboard tab is a hand-built
-  alternative computed client-side, not a native AG Grid feature.
+  Charts (all Enterprise-only) — the Dashboard tab's grouping/charts are
+  computed client-side in plain TypeScript and rendered with ECharts, not
+  native AG Grid features.
 - No cross-currency conversion; totals are always shown per original
-  currency.
+  currency, and any chart or total scoped to "amounts in <currency>" only
+  counts documents in that currency.
+- Saved views only capture column filters, sort, and quick-search text (what
+  AG Grid Community exposes) — not a full custom query builder.

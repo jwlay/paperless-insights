@@ -12,6 +12,7 @@ export interface NormalizedDocument {
   id: number
   title: string
   createdDate: string | null
+  addedDate: string | null
   correspondent: string | null
   documentType: string | null
   storagePath: string | null
@@ -72,6 +73,7 @@ export function toNormalizedDocument(
     id: doc.id,
     title: doc.title,
     createdDate: doc.created,
+    addedDate: doc.added,
     correspondent,
     documentType,
     storagePath,

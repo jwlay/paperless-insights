@@ -1,11 +1,15 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConnectionSetup } from '@/components/ConnectionSetup'
 import { DocumentsGrid } from '@/components/DocumentsGrid'
-import { DashboardPage } from '@/pages/DashboardPage'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { clearPaperlessConfig, getPaperlessConfig } from '@/lib/paperless-config'
+
+// ECharts is a large dependency — only load it when the Dashboard tab is actually opened.
+const DashboardPage = lazy(() =>
+  import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+)
 
 const queryClient = new QueryClient()
 
@@ -39,7 +43,11 @@ function App() {
           <DocumentsGrid />
         </TabsContent>
         <TabsContent value="dashboard" className="min-h-0">
-          <DashboardPage />
+          <Suspense
+            fallback={<div className="p-6 text-sm text-muted-foreground">Loading dashboard…</div>}
+          >
+            <DashboardPage />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </QueryClientProvider>

@@ -2,12 +2,15 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { themeQuartz } from 'ag-grid-community'
 import type { ColDef, GridApi, GridReadyEvent, RowClassParams } from 'ag-grid-community'
+import { RefreshCw } from 'lucide-react'
 import { useDocuments } from '@/api/queries'
 import type { NormalizedDocument } from '@/models/document'
 import { documentColumnDefs } from '@/grid/columns'
+import { getSavedViews, type SavedView } from '@/grid/savedViews'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ColumnVisibilityMenu } from '@/components/ColumnVisibilityMenu'
+import { ViewsMenu, type BuiltInViewId } from '@/components/ViewsMenu'
 import { cn } from '@/lib/utils'
 
 const gridTheme = themeQuartz.withParams({
@@ -23,19 +26,12 @@ const amountFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 })
 
-type ViewPreset = 'all' | 'year' | 'last30' | 'missing'
-
-const VIEW_PRESETS: { id: ViewPreset; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'year', label: 'This year' },
-  { id: 'last30', label: 'Last 30 days' },
-  { id: 'missing', label: 'Missing metadata' },
-]
-
-function applyViewPreset(data: NormalizedDocument[], view: ViewPreset): NormalizedDocument[] {
+function applyBuiltInView(data: NormalizedDocument[], view: BuiltInViewId): NormalizedDocument[] {
   switch (view) {
-    case 'missing':
-      return data.filter((doc) => doc.hasMissingMetadata)
+    case 'missing-amount':
+      return data.filter((doc) => doc.missingFields.includes('amount'))
+    case 'missing-correspondent':
+      return data.filter((doc) => doc.missingFields.includes('correspondent'))
     case 'year': {
       const currentYear = new Date().getFullYear()
       return data.filter(
@@ -72,13 +68,14 @@ function StatTile({
 }
 
 export function DocumentsGrid() {
-  const { data, isLoading, error } = useDocuments()
+  const { data, isLoading, isFetching, error, refetch } = useDocuments()
   const gridApiRef = useRef<GridApi<NormalizedDocument> | null>(null)
   const [quickFilter, setQuickFilter] = useState('')
-  const [view, setView] = useState<ViewPreset>('all')
+  const [builtInView, setBuiltInView] = useState<BuiltInViewId>('all')
   const [hiddenFields, setHiddenFields] = useState<Set<string>>(() => new Set())
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => getSavedViews())
 
-  const viewData = useMemo(() => applyViewPreset(data ?? [], view), [data, view])
+  const viewData = useMemo(() => applyBuiltInView(data ?? [], builtInView), [data, builtInView])
 
   // Column visibility is driven entirely by this state (not by imperative grid
   // API calls) so it can never fight with the declarative columnDefs prop.
@@ -136,19 +133,6 @@ export function DocumentsGrid() {
 
   return (
     <div className="flex h-full flex-col gap-3 p-4">
-      <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/40 p-1">
-        {VIEW_PRESETS.map((preset) => (
-          <Button
-            key={preset.id}
-            size="sm"
-            variant={view === preset.id ? 'secondary' : 'ghost'}
-            onClick={() => setView(preset.id)}
-          >
-            {preset.label}
-          </Button>
-        ))}
-      </div>
-
       <div className="flex flex-wrap gap-2">
         <StatTile label="Documents" value={countFormatter.format(summary.count)} />
         {[...summary.totalsByCurrency.entries()].map(([currency, total]) => (
@@ -168,6 +152,14 @@ export function DocumentsGrid() {
           onChange={(e) => setQuickFilter(e.target.value)}
           className="max-w-sm"
         />
+        <ViewsMenu
+          gridApiRef={gridApiRef}
+          quickFilter={quickFilter}
+          onQuickFilterChange={setQuickFilter}
+          onBuiltInViewChange={setBuiltInView}
+          savedViews={savedViews}
+          onSavedViewsChange={setSavedViews}
+        />
         <ColumnVisibilityMenu
           columnDefs={documentColumnDefs}
           hiddenFields={hiddenFields}
@@ -175,6 +167,9 @@ export function DocumentsGrid() {
         />
         <Button variant="outline" onClick={exportCsv}>
           Export CSV
+        </Button>
+        <Button variant="outline" size="icon" onClick={() => refetch()} aria-label="Refresh documents">
+          <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
         </Button>
         <span className={cn('ml-auto text-sm text-muted-foreground', isLoading && 'animate-pulse')}>
           {isLoading ? 'Loading…' : `${countFormatter.format(viewData.length)} shown`}

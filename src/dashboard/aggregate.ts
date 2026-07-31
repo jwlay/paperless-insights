@@ -86,3 +86,71 @@ export function computeGroups(
 
   return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key))
 }
+
+export interface MonthPoint {
+  key: string
+  label: string
+  count: number
+}
+
+/** Document counts per month, based on `addedDate` (when it entered Paperless) rather than the document's own date. */
+export function computeAddedOverTime(docs: NormalizedDocument[]): MonthPoint[] {
+  const points = new Map<string, MonthPoint>()
+  for (const doc of docs) {
+    if (!doc.addedDate) continue
+    const { key, label } = monthKeyAndLabel(doc.addedDate)
+    const existing = points.get(key)
+    if (existing) {
+      existing.count += 1
+    } else {
+      points.set(key, { key, label, count: 1 })
+    }
+  }
+  return [...points.values()].sort((a, b) => a.key.localeCompare(b.key))
+}
+
+export interface ExpenseEntry {
+  id: number
+  label: string
+  amount: number
+}
+
+/** Top individual documents by amount, in a single currency (mixing currencies in one ranking would be misleading). */
+export function computeLargestExpenses(
+  docs: NormalizedDocument[],
+  currency: string,
+  limit = 20,
+): ExpenseEntry[] {
+  return docs
+    .filter((doc) => doc.amount != null && doc.currency === currency)
+    .map((doc) => ({
+      id: doc.id,
+      label: doc.correspondent ? `${doc.correspondent} — ${doc.title}` : doc.title,
+      amount: doc.amount as number,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, limit)
+}
+
+export interface MissingReasonCount {
+  reason: string
+  count: number
+}
+
+const MISSING_REASON_LABELS: Record<string, string> = {
+  correspondent: 'Missing correspondent',
+  'document type': 'Missing document type',
+  amount: 'Missing amount',
+}
+
+export function computeMissingReasons(docs: NormalizedDocument[]): MissingReasonCount[] {
+  const counts = new Map<string, number>()
+  for (const doc of docs) {
+    for (const field of doc.missingFields) {
+      counts.set(field, (counts.get(field) ?? 0) + 1)
+    }
+  }
+  return [...counts.entries()]
+    .map(([field, count]) => ({ reason: MISSING_REASON_LABELS[field] ?? field, count }))
+    .sort((a, b) => b.count - a.count)
+}
