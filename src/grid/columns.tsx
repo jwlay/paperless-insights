@@ -6,7 +6,12 @@ export function getColId(col: ColDef<NormalizedDocument>): string | undefined {
   return col.colId ?? (typeof col.field === 'string' ? col.field : undefined)
 }
 
-function tagsAsText(tags: DocumentTag[] | undefined) {
+// AG Grid calls this from valueFormatter, getQuickFilterText, and
+// filterValueGetter, and doesn't consistently pass the raw array in every
+// case — sometimes it's already-formatted text from a prior pass. Handle
+// both rather than relying on which one it happens to be.
+export function tagsAsText(tags: DocumentTag[] | string | null | undefined): string {
+  if (typeof tags === 'string') return tags
   return tags?.map((tag) => tag.name).join(', ') ?? ''
 }
 
