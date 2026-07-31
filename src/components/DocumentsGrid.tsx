@@ -1,7 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { themeQuartz } from 'ag-grid-community'
-import type { ColDef, GridApi, GridReadyEvent, RowClassParams } from 'ag-grid-community'
+import type {
+  ColDef,
+  FilterChangedEvent,
+  GridApi,
+  GridReadyEvent,
+  RowClassParams,
+} from 'ag-grid-community'
 import { RefreshCw } from 'lucide-react'
 import { useDocuments } from '@/api/queries'
 import type { NormalizedDocument } from '@/models/document'
@@ -11,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ColumnVisibilityMenu } from '@/components/ColumnVisibilityMenu'
 import { ViewsMenu, type BuiltInViewId } from '@/components/ViewsMenu'
+import { useDocumentsFilter } from '@/context/DocumentsFilterContext'
 import { cn } from '@/lib/utils'
 
 const gridTheme = themeQuartz.withParams({
@@ -69,6 +76,7 @@ function StatTile({
 
 export function DocumentsGrid() {
   const { data, isLoading, isFetching, error, refetch } = useDocuments()
+  const { setFilteredDocuments } = useDocumentsFilter()
   const gridApiRef = useRef<GridApi<NormalizedDocument> | null>(null)
   const [quickFilter, setQuickFilter] = useState('')
   const [builtInView, setBuiltInView] = useState<BuiltInViewId>('all')
@@ -119,9 +127,39 @@ export function DocumentsGrid() {
     [],
   )
 
-  const onGridReady = useCallback((e: GridReadyEvent<NormalizedDocument>) => {
-    gridApiRef.current = e.api
-  }, [])
+  // Publishes whatever the grid currently shows (built-in view + column
+  // filters + quick search all already applied) so the Dashboard can reuse
+  // the same filtered set instead of re-implementing AG Grid's filter logic.
+  const publishFilteredDocuments = useCallback(() => {
+    const api = gridApiRef.current
+    if (!api) return
+    const rows: NormalizedDocument[] = []
+    api.forEachNodeAfterFilter((node) => {
+      if (node.data) rows.push(node.data)
+    })
+    setFilteredDocuments(rows)
+  }, [setFilteredDocuments])
+
+  const onGridReady = useCallback(
+    (e: GridReadyEvent<NormalizedDocument>) => {
+      gridApiRef.current = e.api
+      publishFilteredDocuments()
+    },
+    [publishFilteredDocuments],
+  )
+
+  const onFilterChanged = useCallback(
+    (_e: FilterChangedEvent<NormalizedDocument>) => {
+      publishFilteredDocuments()
+    },
+    [publishFilteredDocuments],
+  )
+
+  // Column filters/quick search fire onFilterChanged themselves, but changing
+  // the built-in view swaps rowData directly — re-publish after that too.
+  useEffect(() => {
+    publishFilteredDocuments()
+  }, [viewData, publishFilteredDocuments])
 
   const exportCsv = useCallback(() => {
     gridApiRef.current?.exportDataAsCsv({ fileName: 'paperless-insights-documents.csv' })
@@ -185,6 +223,7 @@ export function DocumentsGrid() {
           quickFilterText={quickFilter}
           getRowClass={getRowClass}
           onGridReady={onGridReady}
+          onFilterChanged={onFilterChanged}
           animateRows
           loading={isLoading}
         />

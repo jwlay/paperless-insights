@@ -23,10 +23,18 @@ only in that browser's `localStorage`. Nothing is sent anywhere else.
   hardcoded field ID), parsing currency + amount from values like `USD25.11`
   (see [Custom field setup](#custom-field-setup-required-for-amounts) below)
 - Correspondent/tag/document type/storage path names resolved from IDs
-- A Dashboard tab (charts via [Apache ECharts](https://echarts.apache.org/)):
-  monthly spending, spending by correspondent, spending by tag, currency
-  distribution, top 20 vendors, largest expenses, documents added over time,
-  and missing metadata
+- A Dashboard tab (charts via [Apache ECharts](https://echarts.apache.org/))
+  that **reuses whatever filters are active in the Documents grid** — same
+  saved view, same search, same column filters — with a banner making it
+  explicit when you're looking at a filtered subset rather than everything,
+  and a one-click toggle back to all documents
+- Dashboard charts are fully customizable: add a chart by picking a
+  dimension (correspondent/tag/document type/storage path/currency/year/
+  month), a metric (total amount or document count), and a visual (bar/
+  line/pie), or remove any chart — your layout persists locally. Ships with
+  8 preconfigured: monthly spending, spending by correspondent, spending by
+  tag, currency distribution, top 20 vendors, largest expenses, documents
+  added over time, and missing metadata
 - Tag pills rendered with their actual Paperless colors
 - Preserves original currencies — no forced conversion
 
@@ -162,8 +170,9 @@ src/
   parsing/      Amount/currency parsing (auto-detects the monetary custom field)
   components/   Shared UI (connection screen, grid, column/views menus)
   grid/         AG Grid column definitions, cell renderers, saved-views storage
-  dashboard/    Client-side grouping/aggregation + ECharts wrapper
+  dashboard/    Grouping/aggregation, chart config + option builders, ECharts wrapper
   pages/        Top-level pages (Dashboard)
+  context/      Cross-page state (Documents grid's active filter, shared with Dashboard)
   lib/          Local storage config, shadcn utils
 ```
 
