@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getPaperlessConfig } from '@/lib/paperless-config'
-import { findAmountFieldId } from '@/parsing/amount'
+import { toCustomFieldDefs, type CustomFieldDef } from '@/parsing/customFields'
 import { toNormalizedDocument, type DocumentTag, type NormalizedDocument } from '@/models/document'
 import type { Tag } from './types'
 import {
@@ -11,6 +11,11 @@ import {
   fetchStoragePaths,
   fetchTags,
 } from './client'
+
+export interface DocumentsResult {
+  documents: NormalizedDocument[]
+  customFieldDefs: CustomFieldDef[]
+}
 
 function toNameMap(items: { id: number; name: string }[]) {
   return new Map(items.map((item) => [item.id, item.name]))
@@ -32,7 +37,7 @@ export function useDocuments() {
     queryKey: ['paperless-documents', config?.baseUrl],
     enabled: config !== null,
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<NormalizedDocument[]> => {
+    queryFn: async (): Promise<DocumentsResult> => {
       if (!config) throw new Error('Not connected to Paperless.')
       const { baseUrl, token } = config
 
@@ -46,7 +51,7 @@ export function useDocuments() {
           fetchCustomFields(baseUrl, token),
         ])
 
-      const amountFieldId = findAmountFieldId(customFields)
+      const customFieldDefs = toCustomFieldDefs(customFields)
       const lookups = {
         correspondents: toNameMap(correspondents),
         documentTypes: toNameMap(documentTypes),
@@ -54,7 +59,10 @@ export function useDocuments() {
         tags: toTagMap(tags),
       }
 
-      return documents.map((doc) => toNormalizedDocument(doc, lookups, amountFieldId, baseUrl))
+      return {
+        documents: documents.map((doc) => toNormalizedDocument(doc, lookups, customFieldDefs, baseUrl)),
+        customFieldDefs,
+      }
     },
   })
 }

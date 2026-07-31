@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,82 +17,114 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { GroupByDimension } from './aggregate'
-import type { ChartConfig, ChartMetric, ChartVisual } from './chartConfig'
+import type { NormalizedDocument } from '@/models/document'
+import { isNumericDataType, type CustomFieldDef } from '@/parsing/customFields'
+import type { BuiltinDimensionKey, Dimension } from './aggregate'
+import type { ChartConfig, ChartVisual, Metric } from './chartConfig'
 
-const DIMENSIONS: { id: GroupByDimension; label: string }[] = [
-  { id: 'correspondent', label: 'Correspondent' },
-  { id: 'tag', label: 'Tag' },
-  { id: 'documentType', label: 'Document type' },
-  { id: 'storagePath', label: 'Storage path' },
-  { id: 'currency', label: 'Currency' },
-  { id: 'year', label: 'Year' },
-  { id: 'month', label: 'Month' },
+const BUILTIN_DIMENSIONS: { key: BuiltinDimensionKey; label: string }[] = [
+  { key: 'correspondent', label: 'Correspondent' },
+  { key: 'tag', label: 'Tag' },
+  { key: 'documentType', label: 'Document type' },
+  { key: 'storagePath', label: 'Storage path' },
+  { key: 'year', label: 'Year' },
+  { key: 'month', label: 'Month' },
 ]
 
-type SpecialKind = 'largest-expenses' | 'added-over-time' | 'missing-metadata'
-type Kind = 'grouped' | SpecialKind
-
-const SPECIAL_KINDS: { id: SpecialKind; label: string; title: string }[] = [
-  { id: 'largest-expenses', label: 'Largest individual expenses', title: 'Largest expenses' },
-  { id: 'added-over-time', label: 'Documents added over time', title: 'Documents added over time' },
-  { id: 'missing-metadata', label: 'Missing metadata breakdown', title: 'Missing metadata' },
-]
-
-function defaultVisual(dimension: GroupByDimension): ChartVisual {
-  return dimension === 'month' || dimension === 'year' ? 'line' : 'bar'
+// "dim:builtin:correspondent" / "dim:field:14" — a flat string key so a single
+// Select can list both kinds of options.
+function dimensionKey(d: Dimension): string {
+  return d.kind === 'builtin' ? `builtin:${d.key}` : `field:${d.fieldId}`
+}
+function parseDimensionKey(key: string): Dimension {
+  const [kind, rest] = key.split(':') as ['builtin' | 'field', string]
+  return kind === 'builtin' ? { kind: 'builtin', key: rest as BuiltinDimensionKey } : { kind: 'customField', fieldId: Number(rest) }
 }
 
-function suggestTitle(dimension: GroupByDimension, metric: ChartMetric): string {
-  const label = DIMENSIONS.find((d) => d.id === dimension)?.label ?? dimension
-  return metric === 'total' ? `Spending by ${label.toLowerCase()}` : `${label} — document count`
+function metricKey(m: Metric): string {
+  return m.kind === 'count' ? 'count' : `sum:${m.fieldId}`
+}
+
+function dimensionLabel(d: Dimension, customFieldDefs: CustomFieldDef[]): string {
+  if (d.kind === 'builtin') return BUILTIN_DIMENSIONS.find((b) => b.key === d.key)?.label ?? d.key
+  return customFieldDefs.find((f) => f.id === d.fieldId)?.name ?? 'custom field'
 }
 
 export function AddChartDialog({
   open,
   onOpenChange,
   onAdd,
+  customFieldDefs,
+  docs,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onAdd: (config: ChartConfig) => void
+  customFieldDefs: CustomFieldDef[]
+  docs: NormalizedDocument[]
 }) {
-  const [kind, setKind] = useState<Kind>('grouped')
-  const [dimension, setDimension] = useState<GroupByDimension>('correspondent')
-  const [metric, setMetric] = useState<ChartMetric>('total')
+  const numericFields = useMemo(
+    () => customFieldDefs.filter((f) => isNumericDataType(f.dataType)),
+    [customFieldDefs],
+  )
+
+  const [dimension, setDimension] = useState<Dimension>({ kind: 'builtin', key: 'correspondent' })
+  const [metric, setMetric] = useState<Metric>({ kind: 'count' })
+  const [currency, setCurrency] = useState<string | null>(null)
   const [visual, setVisual] = useState<ChartVisual>('bar')
-  const [title, setTitle] = useState(suggestTitle('correspondent', 'total'))
+  const [title, setTitle] = useState('')
   const [titleTouched, setTitleTouched] = useState(false)
 
-  function updateDimension(next: GroupByDimension) {
-    setDimension(next)
-    setVisual(defaultVisual(next))
-    if (!titleTouched) setTitle(suggestTitle(next, metric))
-  }
+  const sumField =
+    metric.kind === 'sum' ? customFieldDefs.find((f) => f.id === metric.fieldId) : undefined
+  const currenciesForSumField = useMemo(() => {
+    if (!sumField || sumField.dataType !== 'monetary') return []
+    const set = new Set<string>()
+    for (const doc of docs) {
+      const cf = doc.customFields.find((c) => c.fieldId === sumField.id)
+      if (cf?.currency) set.add(cf.currency)
+    }
+    return [...set].sort()
+  }, [sumField, docs])
 
-  function updateMetric(next: ChartMetric) {
-    setMetric(next)
-    if (!titleTouched) setTitle(suggestTitle(dimension, next))
-  }
+  const suggestedTitle = (() => {
+    const dimLabel = dimensionLabel(dimension, customFieldDefs)
+    if (metric.kind === 'count') return `Documents by ${dimLabel.toLowerCase()}`
+    const fieldName = customFieldDefs.find((f) => f.id === metric.fieldId)?.name ?? 'value'
+    return `${fieldName} by ${dimLabel.toLowerCase()}${currency ? ` (${currency})` : ''}`
+  })()
+
+  const effectiveTitle = titleTouched ? title : suggestedTitle
+
+  const previewSentence = (() => {
+    const dimLabel = dimensionLabel(dimension, customFieldDefs)
+    const shape =
+      visual === 'pie'
+        ? 'slices'
+        : visual === 'line'
+          ? 'points'
+          : 'bars'
+    const measured =
+      metric.kind === 'count'
+        ? 'the number of documents'
+        : `the sum of "${customFieldDefs.find((f) => f.id === metric.fieldId)?.name}"${currency ? ` in ${currency}` : ''}`
+    return `Each ${shape.slice(0, -1)} is one ${dimLabel.toLowerCase()}; its size is ${measured}.`
+  })()
 
   function handleAdd() {
     const id = crypto.randomUUID()
-    if (kind === 'grouped') {
-      onAdd({
-        id,
-        title: title.trim() || suggestTitle(dimension, metric),
-        kind: 'grouped',
-        dimension,
-        metric,
-        visual,
-        limit: 10,
-      })
-    } else {
-      const special = SPECIAL_KINDS.find((s) => s.id === kind)!
-      onAdd({ id, title: title.trim() || special.title, kind: special.id })
-    }
+    onAdd({
+      id,
+      title: effectiveTitle,
+      kind: 'grouped',
+      dimension,
+      metric: metric.kind === 'sum' ? { ...metric, currency } : metric,
+      visual,
+      limit: 10,
+    })
     onOpenChange(false)
     setTitleTouched(false)
+    setTitle('')
   }
 
   return (
@@ -101,25 +133,52 @@ export function AddChartDialog({
         <DialogHeader>
           <DialogTitle>Add chart</DialogTitle>
           <DialogDescription>
-            Pick what to chart. Grouped charts can combine any dimension with a metric and
-            visual type.
+            Every chart groups documents by one field, then measures each group by a count or a
+            sum.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label>Chart type</Label>
+            <Label>Group by</Label>
+            <p className="text-xs text-muted-foreground">
+              Which field splits documents into bars/slices/points.
+            </p>
             <Select
-              value={kind}
+              value={dimensionKey(dimension)}
+              onValueChange={(v) => setDimension(parseDimensionKey(v))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BUILTIN_DIMENSIONS.map((d) => (
+                  <SelectItem key={d.key} value={`builtin:${d.key}`}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+                {customFieldDefs.map((f) => (
+                  <SelectItem key={f.id} value={`field:${f.id}`}>
+                    {f.name} ({f.dataType})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Measure</Label>
+            <p className="text-xs text-muted-foreground">What each bar/slice/point's size means.</p>
+            <Select
+              value={metricKey(metric)}
               onValueChange={(v) => {
-                const next = v as Kind
-                setKind(next)
-                if (!titleTouched) {
-                  setTitle(
-                    next === 'grouped'
-                      ? suggestTitle(dimension, metric)
-                      : (SPECIAL_KINDS.find((s) => s.id === next)?.title ?? ''),
-                  )
+                if (v === 'count') {
+                  setMetric({ kind: 'count' })
+                  setCurrency(null)
+                } else {
+                  const fieldId = Number(v.split(':')[1])
+                  setMetric({ kind: 'sum', fieldId, currency: null })
+                  setCurrency(null)
                 }
               }}
             >
@@ -127,67 +186,60 @@ export function AddChartDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="grouped">Grouped chart (pick a dimension)</SelectItem>
-                {SPECIAL_KINDS.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.label}
+                <SelectItem value="count">Number of documents</SelectItem>
+                {numericFields.map((f) => (
+                  <SelectItem key={f.id} value={`sum:${f.id}`}>
+                    Sum of {f.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {kind === 'grouped' && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Dimension</Label>
-                <Select value={dimension} onValueChange={(v) => updateDimension(v as GroupByDimension)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DIMENSIONS.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {d.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Metric</Label>
-                <Select value={metric} onValueChange={(v) => updateMetric(v as ChartMetric)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="total">Total amount</SelectItem>
-                    <SelectItem value="count">Document count</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Visual</Label>
-                <Select value={visual} onValueChange={(v) => setVisual(v as ChartVisual)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bar">Bar (ranking)</SelectItem>
-                    <SelectItem value="line">Line (trend)</SelectItem>
-                    <SelectItem value="pie">Pie (share of whole, top 3 + Other)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
+          {sumField?.dataType === 'monetary' && currenciesForSumField.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Currency</Label>
+              <p className="text-xs text-muted-foreground">
+                "{sumField.name}" has values in more than one currency — pick one to sum (mixing
+                currencies can't be added together meaningfully).
+              </p>
+              <Select value={currency ?? currenciesForSumField[0]} onValueChange={setCurrency}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {currenciesForSumField.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
+
+          <div className="space-y-1.5">
+            <Label>Visual</Label>
+            <Select value={visual} onValueChange={(v) => setVisual(v as ChartVisual)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bar">Bar — best for ranking categories</SelectItem>
+                <SelectItem value="line">Line — best for a trend over year/month</SelectItem>
+                <SelectItem value="pie">Pie — best for a few categories' share of the whole</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            {previewSentence}
+          </div>
 
           <div className="space-y-1.5">
             <Label>Title</Label>
             <Input
-              value={title}
+              value={effectiveTitle}
               onChange={(e) => {
                 setTitle(e.target.value)
                 setTitleTouched(true)

@@ -11,7 +11,7 @@ import type {
 import { RefreshCw } from 'lucide-react'
 import { useDocuments } from '@/api/queries'
 import type { NormalizedDocument } from '@/models/document'
-import { documentColumnDefs } from '@/grid/columns'
+import { buildDocumentColumnDefs, getColId } from '@/grid/columns'
 import { getSavedViews, type SavedView } from '@/grid/savedViews'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -35,8 +35,6 @@ const amountFormatter = new Intl.NumberFormat(undefined, {
 
 function applyBuiltInView(data: NormalizedDocument[], view: BuiltInViewId): NormalizedDocument[] {
   switch (view) {
-    case 'missing-amount':
-      return data.filter((doc) => doc.missingFields.includes('amount'))
     case 'missing-correspondent':
       return data.filter((doc) => doc.missingFields.includes('correspondent'))
     case 'year': {
@@ -83,37 +81,49 @@ export function DocumentsGrid() {
   const [hiddenFields, setHiddenFields] = useState<Set<string>>(() => new Set())
   const [savedViews, setSavedViews] = useState<SavedView[]>(() => getSavedViews())
 
-  const viewData = useMemo(() => applyBuiltInView(data ?? [], builtInView), [data, builtInView])
+  const documents = data?.documents ?? []
+  const customFieldDefs = data?.customFieldDefs ?? []
+
+  const viewData = useMemo(() => applyBuiltInView(documents, builtInView), [documents, builtInView])
+
+  const baseColumnDefs = useMemo(() => buildDocumentColumnDefs(customFieldDefs), [customFieldDefs])
 
   // Column visibility is driven entirely by this state (not by imperative grid
   // API calls) so it can never fight with the declarative columnDefs prop.
   const columnDefs = useMemo<ColDef<NormalizedDocument>[]>(
     () =>
-      documentColumnDefs.map((col) =>
-        col.field ? { ...col, hide: hiddenFields.has(col.field) } : col,
-      ),
-    [hiddenFields],
+      baseColumnDefs.map((col) => {
+        const colId = getColId(col)
+        return colId ? { ...col, hide: hiddenFields.has(colId) } : col
+      }),
+    [baseColumnDefs, hiddenFields],
   )
 
-  const toggleColumn = useCallback((field: string, visible: boolean) => {
+  const toggleColumn = useCallback((colId: string, visible: boolean) => {
     setHiddenFields((prev) => {
       const next = new Set(prev)
-      if (visible) next.delete(field)
-      else next.add(field)
+      if (visible) next.delete(colId)
+      else next.add(colId)
       return next
     })
   }, [])
 
+  // One stat per (custom field, currency) combo actually present — this app
+  // doesn't privilege any single "amount" field, so any number of monetary
+  // custom fields each get their own total.
   const summary = useMemo(() => {
     let missing = 0
-    const totalsByCurrency = new Map<string, number>()
+    const totals = new Map<string, number>()
     for (const doc of viewData) {
       if (doc.hasMissingMetadata) missing += 1
-      if (doc.amount != null && doc.currency) {
-        totalsByCurrency.set(doc.currency, (totalsByCurrency.get(doc.currency) ?? 0) + doc.amount)
+      for (const cf of doc.customFields) {
+        if (cf.dataType === 'monetary' && cf.numericValue != null && cf.currency) {
+          const key = `${cf.fieldName} (${cf.currency})`
+          totals.set(key, (totals.get(key) ?? 0) + cf.numericValue)
+        }
       }
     }
-    return { count: viewData.length, missing, totalsByCurrency }
+    return { count: viewData.length, missing, totals }
   }, [viewData])
 
   const defaultColDef = useMemo<ColDef>(
@@ -173,8 +183,8 @@ export function DocumentsGrid() {
     <div className="flex h-full flex-col gap-3 p-4">
       <div className="flex flex-wrap gap-2">
         <StatTile label="Documents" value={countFormatter.format(summary.count)} />
-        {[...summary.totalsByCurrency.entries()].map(([currency, total]) => (
-          <StatTile key={currency} label={`${currency} total`} value={amountFormatter.format(total)} />
+        {[...summary.totals.entries()].map(([label, total]) => (
+          <StatTile key={label} label={label} value={amountFormatter.format(total)} />
         ))}
         <StatTile
           label="Missing metadata"
@@ -199,7 +209,7 @@ export function DocumentsGrid() {
           onSavedViewsChange={setSavedViews}
         />
         <ColumnVisibilityMenu
-          columnDefs={documentColumnDefs}
+          columnDefs={baseColumnDefs}
           hiddenFields={hiddenFields}
           onToggle={toggleColumn}
         />

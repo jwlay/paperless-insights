@@ -1,25 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useDocuments } from '@/api/queries'
 import { useDocumentsFilter } from '@/context/DocumentsFilterContext'
 import { buildChartOption } from '@/dashboard/chartOptions'
-import {
-  DEFAULT_CHARTS,
-  getDashboardCharts,
-  saveDashboardCharts,
-  type ChartConfig,
-} from '@/dashboard/chartConfig'
+import { getDefaultCharts, getSavedCharts, saveDashboardCharts, type ChartConfig } from '@/dashboard/chartConfig'
 import { AddChartDialog } from '@/dashboard/AddChartDialog'
 import { EChart } from '@/dashboard/EChart'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 const amountFormatter = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
@@ -58,37 +46,33 @@ export function DashboardPage() {
   const { data, isLoading, error } = useDocuments()
   const { filteredDocuments } = useDocumentsFilter()
   const [useSharedFilter, setUseSharedFilter] = useState(true)
-  const [currency, setCurrency] = useState<string | null>(null)
-  const [charts, setCharts] = useState<ChartConfig[]>(() => getDashboardCharts())
+  const [customCharts, setCustomCharts] = useState<ChartConfig[] | null>(() => getSavedCharts())
   const [addOpen, setAddOpen] = useState(false)
 
-  const allDocs = data ?? []
+  const allDocs = data?.documents ?? []
+  const customFieldDefs = data?.customFieldDefs ?? []
   const docs = useSharedFilter && filteredDocuments ? filteredDocuments : allDocs
-  const isFiltered = useSharedFilter && filteredDocuments != null && filteredDocuments.length !== allDocs.length
+  const isFiltered =
+    useSharedFilter && filteredDocuments != null && filteredDocuments.length !== allDocs.length
 
-  const currencies = useMemo(() => {
-    const set = new Set<string>()
-    for (const doc of docs) if (doc.currency) set.add(doc.currency)
-    return [...set].sort()
-  }, [docs])
+  const charts = customCharts ?? getDefaultCharts(customFieldDefs, docs)
 
-  const activeCurrency = currency ?? currencies[0] ?? null
-
-  function updateCharts(next: ChartConfig[]) {
-    setCharts(next)
+  function persistCharts(next: ChartConfig[]) {
+    setCustomCharts(next)
     saveDashboardCharts(next)
   }
 
   function removeChart(id: string) {
-    updateCharts(charts.filter((c) => c.id !== id))
+    persistCharts(charts.filter((c) => c.id !== id))
   }
 
   function addChart(config: ChartConfig) {
-    updateCharts([...charts, config])
+    persistCharts([...charts, config])
   }
 
   function resetCharts() {
-    updateCharts(DEFAULT_CHARTS)
+    setCustomCharts(null)
+    saveDashboardCharts(null)
   }
 
   if (error) {
@@ -122,23 +106,6 @@ export function DashboardPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        {currencies.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Amounts in</span>
-            <Select value={activeCurrency ?? undefined} onValueChange={setCurrency}>
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {currencies.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
         {isLoading && <span className="text-sm text-muted-foreground">Loading…</span>}
         <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" onClick={resetCharts}>
@@ -150,35 +117,40 @@ export function DashboardPage() {
         </div>
       </div>
 
+      {charts.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No charts yet — add one, or reset to the defaults.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {charts.map((config) => {
           const option = buildChartOption(
             config,
             docs,
-            activeCurrency,
+            customFieldDefs,
             (v) => amountFormatter.format(v),
             (v) => countFormatter.format(v),
           )
-          const needsCurrency =
-            (config.kind === 'grouped' && config.metric === 'total') || config.kind === 'largest-expenses'
           return (
             <ChartCard key={config.id} title={config.title} onRemove={() => removeChart(config.id)}>
               {option ? (
-                <EChart
-                  option={option}
-                  height={config.kind === 'grouped' && config.limit && config.limit > 10 ? 420 : 280}
-                />
+                <EChart option={option} />
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  {needsCurrency ? 'No currency available for this chart yet.' : 'No data yet.'}
-                </p>
+                <p className="text-sm text-muted-foreground">No data for this chart yet.</p>
               )}
             </ChartCard>
           )
         })}
       </div>
 
-      <AddChartDialog open={addOpen} onOpenChange={setAddOpen} onAdd={addChart} />
+      <AddChartDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onAdd={addChart}
+        customFieldDefs={customFieldDefs}
+        docs={docs}
+      />
     </div>
   )
 }

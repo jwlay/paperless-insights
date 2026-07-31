@@ -1,86 +1,164 @@
-import type { GroupByDimension } from './aggregate'
+import type { NormalizedDocument } from '@/models/document'
+import type { CustomFieldDef } from '@/parsing/customFields'
+import type { Dimension } from './aggregate'
 
 export type ChartVisual = 'bar' | 'line' | 'pie'
-export type ChartMetric = 'total' | 'count'
+export type Metric = { kind: 'count' } | { kind: 'sum'; fieldId: number; currency: string | null }
 
 export interface GroupedChartConfig {
   id: string
   title: string
   kind: 'grouped'
-  dimension: GroupByDimension
-  metric: ChartMetric
+  dimension: Dimension
+  metric: Metric
   visual: ChartVisual
   limit?: number
 }
 
-export interface SpecialChartConfig {
+export interface LargestValuesChartConfig {
   id: string
   title: string
-  kind: 'largest-expenses' | 'added-over-time' | 'missing-metadata'
+  kind: 'largest-values'
+  fieldId: number
+  currency: string | null
 }
 
-export type ChartConfig = GroupedChartConfig | SpecialChartConfig
+export interface CurrencyDistributionChartConfig {
+  id: string
+  title: string
+  kind: 'currency-distribution'
+  fieldId: number
+}
 
-export const DEFAULT_CHARTS: ChartConfig[] = [
-  {
-    id: 'default-monthly-spending',
-    title: 'Monthly spending',
-    kind: 'grouped',
-    dimension: 'month',
-    metric: 'total',
-    visual: 'line',
-  },
-  {
-    id: 'default-by-correspondent',
-    title: 'Spending by correspondent',
-    kind: 'grouped',
-    dimension: 'correspondent',
-    metric: 'total',
-    visual: 'bar',
-    limit: 10,
-  },
-  {
-    id: 'default-by-tag',
-    title: 'Spending by tag',
-    kind: 'grouped',
-    dimension: 'tag',
-    metric: 'total',
-    visual: 'bar',
-    limit: 10,
-  },
-  {
-    id: 'default-currency-distribution',
-    title: 'Currency distribution',
-    kind: 'grouped',
-    dimension: 'currency',
-    metric: 'count',
-    visual: 'pie',
-  },
-  {
-    id: 'default-top-vendors',
-    title: 'Top 20 vendors',
-    kind: 'grouped',
-    dimension: 'correspondent',
-    metric: 'count',
-    visual: 'bar',
-    limit: 20,
-  },
-  { id: 'default-largest-expenses', title: 'Largest expenses', kind: 'largest-expenses' },
-  { id: 'default-added-over-time', title: 'Documents added over time', kind: 'added-over-time' },
-  { id: 'default-missing-metadata', title: 'Missing metadata', kind: 'missing-metadata' },
-]
+export interface AddedOverTimeChartConfig {
+  id: string
+  title: string
+  kind: 'added-over-time'
+}
 
-const STORAGE_KEY = 'paperless-insights:dashboard-charts'
+export interface MissingFieldsChartConfig {
+  id: string
+  title: string
+  kind: 'missing-fields'
+}
 
-export function getDashboardCharts(): ChartConfig[] {
+export type ChartConfig =
+  | GroupedChartConfig
+  | LargestValuesChartConfig
+  | CurrencyDistributionChartConfig
+  | AddedOverTimeChartConfig
+  | MissingFieldsChartConfig
+
+function mostCommonCurrency(docs: NormalizedDocument[], fieldId: number): string | null {
+  const counts = new Map<string, number>()
+  for (const doc of docs) {
+    const cf = doc.customFields.find((c) => c.fieldId === fieldId)
+    if (cf?.currency) counts.set(cf.currency, (counts.get(cf.currency) ?? 0) + 1)
+  }
+  let best: string | null = null
+  let bestCount = 0
+  for (const [currency, count] of counts) {
+    if (count > bestCount) {
+      best = currency
+      bestCount = count
+    }
+  }
+  return best
+}
+
+/**
+ * Live defaults, recomputed from whatever custom fields actually exist —
+ * this app doesn't assume a particular field, so the monetary-flavored
+ * charts only appear once a monetary custom field is actually found.
+ */
+export function getDefaultCharts(customFieldDefs: CustomFieldDef[], docs: NormalizedDocument[]): ChartConfig[] {
+  const charts: ChartConfig[] = [
+    {
+      id: 'default-by-correspondent',
+      title: 'Documents by correspondent',
+      kind: 'grouped',
+      dimension: { kind: 'builtin', key: 'correspondent' },
+      metric: { kind: 'count' },
+      visual: 'bar',
+      limit: 10,
+    },
+    {
+      id: 'default-by-tag',
+      title: 'Documents by tag',
+      kind: 'grouped',
+      dimension: { kind: 'builtin', key: 'tag' },
+      metric: { kind: 'count' },
+      visual: 'bar',
+      limit: 10,
+    },
+    {
+      id: 'default-by-type',
+      title: 'Documents by type',
+      kind: 'grouped',
+      dimension: { kind: 'builtin', key: 'documentType' },
+      metric: { kind: 'count' },
+      visual: 'pie',
+    },
+    { id: 'default-added-over-time', title: 'Documents added over time', kind: 'added-over-time' },
+    { id: 'default-missing-fields', title: 'Missing metadata', kind: 'missing-fields' },
+  ]
+
+  const monetary = customFieldDefs.find((d) => d.dataType === 'monetary')
+  if (monetary) {
+    const currency = mostCommonCurrency(docs, monetary.id)
+    charts.push(
+      {
+        id: 'default-monthly-total',
+        title: `Monthly total — ${monetary.name}${currency ? ` (${currency})` : ''}`,
+        kind: 'grouped',
+        dimension: { kind: 'builtin', key: 'month' },
+        metric: { kind: 'sum', fieldId: monetary.id, currency },
+        visual: 'line',
+      },
+      {
+        id: 'default-by-correspondent-total',
+        title: `${monetary.name} by correspondent${currency ? ` (${currency})` : ''}`,
+        kind: 'grouped',
+        dimension: { kind: 'builtin', key: 'correspondent' },
+        metric: { kind: 'sum', fieldId: monetary.id, currency },
+        visual: 'bar',
+        limit: 10,
+      },
+      {
+        id: 'default-largest-values',
+        title: `Largest ${monetary.name} values${currency ? ` (${currency})` : ''}`,
+        kind: 'largest-values',
+        fieldId: monetary.id,
+        currency,
+      },
+      {
+        id: 'default-currency-distribution',
+        title: `${monetary.name} currency distribution`,
+        kind: 'currency-distribution',
+        fieldId: monetary.id,
+      },
+    )
+  }
+
+  return charts
+}
+
+const STORAGE_KEY = 'paperless-insights:dashboard-charts:v2'
+
+/** null means "no explicit customization yet — use live defaults." */
+export function getSavedCharts(): ChartConfig[] | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as ChartConfig[]) : DEFAULT_CHARTS
+    return raw ? (JSON.parse(raw) as ChartConfig[]) : null
   } catch {
-    return DEFAULT_CHARTS
+    return null
   }
 }
 
-export function saveDashboardCharts(charts: ChartConfig[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(charts))
+export function saveDashboardCharts(charts: ChartConfig[] | null) {
+  if (charts === null) {
+    localStorage.removeItem(STORAGE_KEY)
+  } else {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(charts))
+  }
 }

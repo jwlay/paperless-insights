@@ -22,18 +22,12 @@ import {
 import type { NormalizedDocument } from '@/models/document'
 import { addSavedView, removeSavedView, type SavedView } from '@/grid/savedViews'
 
-export type BuiltInViewId =
-  | 'all'
-  | 'year'
-  | 'last30'
-  | 'missing-amount'
-  | 'missing-correspondent'
+export type BuiltInViewId = 'all' | 'year' | 'last30' | 'missing-correspondent'
 
 const BUILT_IN_VIEWS: { id: BuiltInViewId; label: string }[] = [
   { id: 'all', label: 'All documents' },
   { id: 'year', label: 'This year' },
   { id: 'last30', label: 'Last 30 days' },
-  { id: 'missing-amount', label: 'Missing amount' },
   { id: 'missing-correspondent', label: 'Missing correspondent' },
 ]
 

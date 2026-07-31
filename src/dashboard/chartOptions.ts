@@ -1,10 +1,12 @@
 import type { EChartsOption } from 'echarts'
 import type { NormalizedDocument } from '@/models/document'
+import type { CustomFieldDef } from '@/parsing/customFields'
 import {
   computeAddedOverTime,
+  computeCurrencyDistribution,
   computeGroups,
-  computeLargestExpenses,
-  computeMissingReasons,
+  computeLargestValues,
+  computeMissingFields,
 } from './aggregate'
 import type { ChartConfig } from './chartConfig'
 import { ACCENT, CATEGORICAL, CATEGORICAL_OTHER, INK, WARNING } from './colors'
@@ -123,19 +125,24 @@ export function pieOptionFromItems(items: { label: string; value: number }[]): E
 export function buildChartOption(
   config: ChartConfig,
   docs: NormalizedDocument[],
-  currency: string | null,
+  customFieldDefs: CustomFieldDef[],
   amountFormatter: (v: number) => string,
   countFormatter: (v: number) => string,
 ): EChartsOption | null {
   switch (config.kind) {
-    case 'largest-expenses': {
-      if (!currency) return null
-      const entries = computeLargestExpenses(docs, currency, 20)
+    case 'largest-values': {
+      const entries = computeLargestValues(docs, config.fieldId, config.currency, 20)
+      if (entries.length === 0) return null
       return rankedBarOption(
-        entries.map((e) => ({ label: e.label, value: e.amount })),
+        entries.map((e) => ({ label: e.label, value: e.value })),
         ACCENT,
         amountFormatter,
       )
+    }
+    case 'currency-distribution': {
+      const dist = computeCurrencyDistribution(docs, config.fieldId)
+      if (dist.length === 0) return null
+      return pieOptionFromItems(dist.map((d) => ({ label: d.currency, value: d.count })))
     }
     case 'added-over-time': {
       const points = computeAddedOverTime(docs)
@@ -146,22 +153,25 @@ export function buildChartOption(
         countFormatter,
       )
     }
-    case 'missing-metadata': {
-      const reasons = computeMissingReasons(docs)
+    case 'missing-fields': {
+      const reasons = computeMissingFields(docs, customFieldDefs)
+      if (reasons.length === 0) return null
       return rankedBarOption(
-        reasons.map((r) => ({ label: r.reason, value: r.count })),
+        reasons.map((r) => ({ label: r.label, value: r.count })),
         WARNING,
         countFormatter,
       )
     }
     case 'grouped': {
-      const groups = computeGroups(docs, config.dimension)
-      const valueFormatter = config.metric === 'total' ? amountFormatter : countFormatter
-      const items = groups.map((g) => ({
-        label: g.label,
-        value:
-          config.metric === 'total' ? (currency ? (g.totalsByCurrency.get(currency) ?? 0) : 0) : g.count,
-      }))
+      const metric = config.metric
+      const isSum = metric.kind === 'sum'
+      const groups = computeGroups(
+        docs,
+        config.dimension,
+        metric.kind === 'sum' ? { fieldId: metric.fieldId, currency: metric.currency } : undefined,
+      )
+      const valueFormatter = isSum ? amountFormatter : countFormatter
+      const items = groups.map((g) => ({ label: g.label, value: isSum ? g.sum : g.count }))
 
       if (config.visual === 'pie') {
         return pieOptionFromItems(items)

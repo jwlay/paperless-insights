@@ -1,9 +1,18 @@
 # Paperless Insights
 
-A read-only analytics frontend for [Paperless-ngx](https://docs.paperless-ngx.com/).
-Paperless remains the single source of truth for all documents — this app only
-reads metadata through the Paperless REST API to make tax prep, expense
-analysis, and document exploration easier than the stock Paperless UI.
+A general-purpose, read-only analytics frontend for
+[Paperless-ngx](https://docs.paperless-ngx.com/). Paperless remains the single
+source of truth for all documents — this app only reads metadata through the
+Paperless REST API to make filtering, grouping, and charting your documents
+easier than the stock Paperless UI.
+
+It works with **whatever custom fields you've defined in Paperless** — text,
+select, boolean, date, integer/float, or monetary — surfacing each one as a
+grid column, a filter, and a dimension or metric you can chart. It doesn't
+assume any particular field exists; if you have a monetary custom field (e.g.
+for tracking invoice amounts), the grid and dashboard additionally get
+currency-aware totals and expense-style charts for it, but that's one
+capability among general-purpose ones, not the app's whole premise.
 
 **There is no backend.** Everything runs in your browser: it talks directly to
 your Paperless instance's API, and your Paperless URL + API token are stored
@@ -14,29 +23,34 @@ only in that browser's `localStorage`. Nothing is sent anywhere else.
 - Full document grid — sort, filter, quick search, column visibility, CSV
   export, a manual refresh button (no full page reload needed after editing
   something in Paperless)
+- **Every custom field you've defined in Paperless becomes its own grid
+  column** automatically — no configuration needed. Numeric/monetary fields
+  get right-aligned, type-appropriate sorting and filtering; monetary values
+  are parsed into currency + amount and shown like `USD 25.11`
 - Built-in quick views (all documents, this year, last 30 days, missing
-  amount, missing correspondent) plus **saved views**: capture the grid's
-  current column filters, sort order, and search as a named, reusable view
-  (e.g. "Tax receipts 2026", "Software subscriptions") — stored locally,
-  no server round-trip
-- Automatic detection of the "amount" custom field (by data type, not a
-  hardcoded field ID), parsing currency + amount from values like `USD25.11`
-  (see [Custom field setup](#custom-field-setup-required-for-amounts) below)
+  correspondent) plus **saved views**: capture the grid's current column
+  filters, sort order, and search as a named, reusable view (e.g. "Tax
+  receipts 2026", "Software subscriptions") — stored locally, no server
+  round-trip
 - Correspondent/tag/document type/storage path names resolved from IDs
 - A Dashboard tab (charts via [Apache ECharts](https://echarts.apache.org/))
   that **reuses whatever filters are active in the Documents grid** — same
   saved view, same search, same column filters — with a banner making it
   explicit when you're looking at a filtered subset rather than everything,
   and a one-click toggle back to all documents
-- Dashboard charts are fully customizable: add a chart by picking a
-  dimension (correspondent/tag/document type/storage path/currency/year/
-  month), a metric (total amount or document count), and a visual (bar/
-  line/pie), or remove any chart — your layout persists locally. Ships with
-  8 preconfigured: monthly spending, spending by correspondent, spending by
-  tag, currency distribution, top 20 vendors, largest expenses, documents
-  added over time, and missing metadata
+- **Dashboard charts are fully customizable and field-driven**: add a chart
+  by picking what to group by (any built-in field — correspondent, tag,
+  document type, storage path, year, month — or any custom field you've
+  defined), what to measure (document count, or the sum of any numeric
+  custom field), and a visual (bar/line/pie). A live preview sentence spells
+  out what the chart will show before you add it. Ships with a handful of
+  general defaults (documents by correspondent/tag/type, added over time,
+  missing metadata); if a monetary custom field exists, matching
+  money-flavored defaults (monthly totals, largest values, currency
+  distribution) appear automatically alongside them
 - Tag pills rendered with their actual Paperless colors
-- Preserves original currencies — no forced conversion
+- Preserves original currencies — no forced conversion; any chart or total
+  based on a monetary field is scoped to one currency at a time
 
 ## Local development
 
@@ -71,25 +85,23 @@ a non-secret default (the URL), but not for an API token — baking it into a
 served file would defeat the point of it being an authentication credential.
 So the token is always entered once through the UI, per browser.
 
-### Custom field setup (required for amounts)
+### Custom fields
 
-Paperless has no built-in concept of a document "amount" — this app reads it
-from a **custom field you create yourself** in Paperless:
+No setup is required to get custom fields into the grid — every field
+defined in Paperless (Settings → Custom Fields) shows up automatically as a
+column, filterable and sortable like any other.
 
-1. In Paperless: Settings → Custom Fields → Add Field
-2. Set its **type to "Monetary"** (the name doesn't matter — call it "Total
-   Amount", "Invoice Amount", whatever you like)
-3. Populate it on your documents with the amount, e.g. `25.11 USD` — Paperless
-   stores this as a currency + number pair (`USD25.11`), which is what this
-   app parses. You can fill it in manually per document, or automate it with
-   a Paperless workflow/consumption template if you already extract amounts
-   some other way.
+If you want currency-aware totals and money-flavored dashboard charts, create
+a custom field with **type "Monetary"** (call it anything — "Total Amount",
+"Invoice Amount", whatever). The app detects it **by its type**, not by name
+or a hardcoded ID, so you can rename or add more than one. Populate it on
+your documents with the amount, e.g. `25.11 USD` — Paperless stores this as a
+currency + number pair (`USD25.11`), which is what this app parses. Fill it
+in manually per document, or automate it with a Paperless workflow/
+consumption template.
 
-The app detects this field **by its type** (`monetary`), not by name or a
-hardcoded ID, so renaming it is safe. If you create more than one monetary
-custom field, only the first one returned by the API is used. Documents with
-no value in this field show up in the "Missing amount" view rather than
-being silently dropped.
+Other field types are handled too: boolean fields show as Yes/No, select
+fields resolve to their option label, dates and text are shown as-is.
 
 ### Paperless-side requirements
 
@@ -166,10 +178,10 @@ reverse proxy config in front works just as well.
 ```
 src/
   api/          Paperless REST client + pagination + TanStack Query hooks
-  models/       Normalized document model + custom-field amount parsing glue
-  parsing/      Amount/currency parsing (auto-detects the monetary custom field)
+  models/       Normalized document model (every custom field parsed generically)
+  parsing/      Per-data-type custom field parsing (monetary/integer/boolean/select/...)
   components/   Shared UI (connection screen, grid, column/views menus)
-  grid/         AG Grid column definitions, cell renderers, saved-views storage
+  grid/         AG Grid column definitions (one per custom field, built dynamically), cell renderers, saved-views storage
   dashboard/    Grouping/aggregation, chart config + option builders, ECharts wrapper
   pages/        Top-level pages (Dashboard)
   context/      Cross-page state (Documents grid's active filter, shared with Dashboard)
@@ -180,7 +192,7 @@ src/
 
 React, TypeScript, Vite, AG Grid Community, Tailwind CSS, shadcn/ui, TanStack
 Query, Apache ECharts. No backend, no build-time coupling to any specific
-Paperless instance.
+Paperless instance or custom field.
 
 ## Limitations
 
@@ -188,8 +200,12 @@ Paperless instance.
   Charts (all Enterprise-only) — the Dashboard tab's grouping/charts are
   computed client-side in plain TypeScript and rendered with ECharts, not
   native AG Grid features.
-- No cross-currency conversion; totals are always shown per original
-  currency, and any chart or total scoped to "amounts in <currency>" only
-  counts documents in that currency.
+- No cross-currency conversion; any chart or total based on a monetary field
+  is scoped to one currency, and only counts documents with a value in that
+  currency for that field.
 - Saved views only capture column filters, sort, and quick-search text (what
   AG Grid Community exposes) — not a full custom query builder.
+- Select-type custom fields are resolved to their option label on a
+  best-effort basis (Paperless's API has stored select values as either an
+  index or the literal option string across versions); if a select column
+  looks wrong, it'll show the raw value rather than something misleading.

@@ -1,5 +1,5 @@
 import type { PaperlessDocument } from '@/api/types'
-import { getAmountField, parseAmountValue } from '@/parsing/amount'
+import { parseCustomFieldValue, type CustomFieldDef, type ParsedCustomFieldValue } from '@/parsing/customFields'
 
 export interface DocumentTag {
   id: number
@@ -16,14 +16,13 @@ export interface NormalizedDocument {
   correspondent: string | null
   documentType: string | null
   storagePath: string | null
-  amount: number | null
-  currency: string | null
   tags: DocumentTag[]
   pageCount: number | null
   originalFileName: string | null
   paperlessUrl: string
   hasMissingMetadata: boolean
   missingFields: string[]
+  customFields: ParsedCustomFieldValue[]
 }
 
 export interface DocumentLookups {
@@ -36,7 +35,7 @@ export interface DocumentLookups {
 export function toNormalizedDocument(
   doc: PaperlessDocument,
   lookups: DocumentLookups,
-  amountFieldId: number | null,
+  customFieldDefs: CustomFieldDef[],
   baseUrl: string,
 ): NormalizedDocument {
   const missingFields: string[] = []
@@ -52,18 +51,10 @@ export function toNormalizedDocument(
   const storagePath =
     doc.storage_path !== null ? (lookups.storagePaths.get(doc.storage_path) ?? null) : null
 
-  const amountField = getAmountField(doc.custom_fields, amountFieldId)
-  let amount: number | null = null
-  let currency: string | null = null
-  if (amountField) {
-    const parsed = parseAmountValue(amountField.value)
-    if (parsed) {
-      amount = parsed.amount
-      currency = parsed.currency
-    } else {
-      missingFields.push('amount')
-    }
-  }
+  const rawByField = new Map(doc.custom_fields.map((cf) => [cf.field, cf.value]))
+  const customFields = customFieldDefs.map((def) =>
+    parseCustomFieldValue(def, rawByField.get(def.id)),
+  )
 
   const tags = doc.tags
     .map((id) => lookups.tags.get(id))
@@ -77,13 +68,12 @@ export function toNormalizedDocument(
     correspondent,
     documentType,
     storagePath,
-    amount,
-    currency,
     tags,
     pageCount: doc.page_count,
     originalFileName: doc.original_file_name,
     paperlessUrl: `${baseUrl}/documents/${doc.id}/details`,
     hasMissingMetadata: missingFields.length > 0,
     missingFields,
+    customFields,
   }
 }
