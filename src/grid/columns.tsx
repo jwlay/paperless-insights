@@ -35,11 +35,7 @@ function OpenLinkCellRenderer(params: ICellRendererParams<NormalizedDocument, st
       href={params.value}
       target="_blank"
       rel="noopener noreferrer"
-      // Fixed color rather than the app's theme-flipping text-primary/dark:
-      // classes — AG Grid's own cell background doesn't reliably follow the
-      // app's dark-mode toggle, so a variable meant to contrast against the
-      // *app shell's* background can end up unreadable against the grid's.
-      className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
+      className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
     >
       Open ↗
     </a>
@@ -78,6 +74,10 @@ export function buildDocumentColumnDefs(customFieldDefs: CustomFieldDef[]): ColD
       field: 'tags',
       headerName: 'Tags',
       cellRenderer: TagsCellRenderer,
+      // Explicit, rather than leaving AG Grid to infer one for CSV export /
+      // quick filter — an inferred formatter for an array-of-objects column
+      // was crashing (AG Grid warning #48) as soon as the quick filter ran.
+      valueFormatter: (params) => tagsAsText(params.value),
       getQuickFilterText: (params) => tagsAsText(params.value),
       filter: 'agTextColumnFilter',
       filterValueGetter: (params) => tagsAsText(params.data?.tags),

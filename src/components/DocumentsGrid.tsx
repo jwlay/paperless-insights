@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact } from 'ag-grid-react'
-import { colorSchemeVariable, themeQuartz } from 'ag-grid-community'
+import { colorSchemeDark, colorSchemeLight, themeQuartz } from 'ag-grid-community'
 import type {
   ColDef,
   FilterChangedEvent,
@@ -18,16 +18,20 @@ import { Button } from '@/components/ui/button'
 import { ColumnVisibilityMenu } from '@/components/ColumnVisibilityMenu'
 import { ViewsMenu, type BuiltInViewId } from '@/components/ViewsMenu'
 import { useDocumentsFilter } from '@/context/DocumentsFilterContext'
+import { useIsDarkMode } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
-// colorSchemeVariable follows prefers-color-scheme itself, in sync with the
-// .dark class this app toggles for the rest of the UI.
-const gridTheme = themeQuartz.withPart(colorSchemeVariable).withParams({
+const gridThemeParams = {
   accentColor: 'var(--primary)',
   borderRadius: 8,
   wrapperBorderRadius: 10,
   headerFontWeight: 600,
-})
+}
+// Explicit dark/light parts picked via our own isDark state, rather than the
+// CSS-native colorSchemeVariable — that relies on the light-dark() function,
+// which isn't reliably supported/applied in every browser.
+const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams(gridThemeParams)
+const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams(gridThemeParams)
 
 const countFormatter = new Intl.NumberFormat(undefined)
 const amountFormatter = new Intl.NumberFormat(undefined, {
@@ -77,6 +81,7 @@ function StatTile({
 export function DocumentsGrid() {
   const { data, isLoading, isFetching, error, refetch } = useDocuments()
   const { setFilteredDocuments } = useDocumentsFilter()
+  const isDark = useIsDarkMode()
   const gridApiRef = useRef<GridApi<NormalizedDocument> | null>(null)
   const [quickFilter, setQuickFilter] = useState('')
   const [builtInView, setBuiltInView] = useState<BuiltInViewId>('all')
@@ -134,10 +139,8 @@ export function DocumentsGrid() {
   )
 
   const getRowClass = useCallback(
-    // Fixed color, not a dark: variant — AG Grid's own background doesn't
-    // reliably follow the app's dark-mode toggle (see OpenLinkCellRenderer).
     (params: RowClassParams<NormalizedDocument>) =>
-      params.data?.hasMissingMetadata ? 'bg-amber-50' : undefined,
+      params.data?.hasMissingMetadata ? 'bg-amber-50 dark:bg-amber-950/40' : undefined,
     [],
   )
 
@@ -230,7 +233,7 @@ export function DocumentsGrid() {
 
       <div className="min-h-0 flex-1">
         <AgGridReact<NormalizedDocument>
-          theme={gridTheme}
+          theme={isDark ? gridThemeDark : gridThemeLight}
           rowData={viewData}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
