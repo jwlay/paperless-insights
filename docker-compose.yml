@@ -11,13 +11,14 @@ services:
     ports:
       - "8080:80"
 
-    # --- Traefik + tinyauth example (matches a paperless-ngx + tinyauth setup) ---
+    # --- Example: Traefik reverse proxy, optionally behind an auth middleware
+    #     (Authelia, Authentik, tinyauth, oauth2-proxy, ...) ---
     # labels:
     #   - "traefik.enable=true"
-    #   - "traefik.http.routers.paperless-insights.rule=Host(`paperless-insights.vps.example.com`)"
+    #   - "traefik.http.routers.paperless-insights.rule=Host(`paperless-insights.example.com`)"
     #   - "traefik.http.routers.paperless-insights.entrypoints=websecure"
     #   - "traefik.http.routers.paperless-insights.tls.certresolver=<your-cert-resolver>"
-    #   - "traefik.http.routers.paperless-insights.middlewares=tinyauth@docker"
+    #   - "traefik.http.routers.paperless-insights.middlewares=<your-auth-middleware>@docker"
     #   - "traefik.http.services.paperless-insights.loadbalancer.server.port=80"
     # networks:
     #   - proxy

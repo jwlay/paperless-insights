@@ -9,6 +9,17 @@ analysis, and document exploration easier than the stock Paperless UI.
 your Paperless instance's API, and your Paperless URL + API token are stored
 only in that browser's `localStorage`. Nothing is sent anywhere else.
 
+## Features
+
+- Full document grid — sort, filter, quick search, column visibility, CSV export
+- Automatic detection of the "amount" custom field (by data type, not a
+  hardcoded field ID), parsing currency + amount from values like `USD25.11`
+- Correspondent/tag/document type/storage path names resolved from IDs
+- A Dashboard tab: group documents by correspondent, tag, currency, year,
+  month, document type, or storage path, with totals and a bar chart
+- Tag pills rendered with their actual Paperless colors
+- Preserves original currencies — no forced conversion
+
 ## Local development
 
 ```bash
@@ -25,9 +36,8 @@ The app asks for two things on first load, via the UI — not env vars:
 
 Both are stored in `localStorage` on whichever device/browser you connect
 from. There's no server-side config file for these, because there's no
-server: reinstalling or redeploying the container doesn't lose them (they
-live in your browser), but a different browser or device needs to connect
-again.
+server: redeploying or updating the container doesn't lose them (they live in
+your browser), but a different browser or device needs to connect again.
 
 The only deploy-time setting is:
 
@@ -52,19 +62,21 @@ cross-origin requests to your Paperless instance:
 1. Add the app's origin to Paperless's `PAPERLESS_CORS_ALLOWED_HOSTS`
    (exact match, including scheme and port if non-standard — no wildcards).
 2. Restart the Paperless container after changing it.
-3. If Paperless sits behind a forward-auth proxy (Authelia/tinyauth/oauth2-proxy/etc.),
-   make sure `/api/*` bypasses it — Paperless already authenticates API
-   requests via the token, and a cookie-based auth gate in front of `/api/*`
-   will block this app's cross-origin requests (they carry no session
-   cookie) even when you're logged into the gate in the same browser.
+3. If Paperless sits behind an auth proxy (Authelia, Authentik, tinyauth,
+   oauth2-proxy, etc.), make sure `/api/*` bypasses it. Paperless already
+   authenticates API requests via the token, and a cookie-based auth gate in
+   front of `/api/*` will block this app's cross-origin requests (they carry
+   no session cookie) even if you're logged into the gate in the same
+   browser.
 
 ## Docker deployment
 
 ### Quickstart (published image)
 
 Every push to `main` builds and publishes an image to GitHub Container
-Registry via `.github/workflows/docker-publish.yml` — `ghcr.io/jwlay/paperless-insights:latest`.
-On your VPS you don't need the source at all, just the compose file:
+Registry via `.github/workflows/docker-publish.yml` —
+`ghcr.io/jwlay/paperless-insights:latest`. You don't need the source on your
+server at all, just the compose file:
 
 ```bash
 curl -O https://raw.githubusercontent.com/jwlay/paperless-insights/main/docker-compose.yml
@@ -105,10 +117,11 @@ nginx (`Dockerfile`, `docker/nginx.conf`). `docker/entrypoint.sh` regenerates
 `config.js` from `PAPERLESS_URL` at container start, so changing that env var
 only needs a container restart — not a rebuild or a re-pull.
 
-`docker-compose.yml` maps port `8080` by default and includes a commented-out
-Traefik + tinyauth label block as a starting point if you're running a
-similar reverse-proxy setup — adjust the host, cert resolver, and network to
-match your own.
+`docker-compose.yml` maps port `8080` by default. If you sit services behind
+a reverse proxy, `docker-compose.yml` includes a commented-out example for
+Traefik with a forward-auth middleware — swap in whatever proxy and auth
+setup (or none) you actually use; a plain `ports:` mapping with your own
+reverse proxy config in front works just as well.
 
 ## Project layout
 
@@ -128,3 +141,11 @@ src/
 
 React, TypeScript, Vite, AG Grid Community, Tailwind CSS, shadcn/ui, TanStack
 Query. No backend, no build-time coupling to any specific Paperless instance.
+
+## Limitations
+
+- AG Grid Community doesn't include row grouping, pivoting, or Integrated
+  Charts (all Enterprise-only) — the Dashboard tab is a hand-built
+  alternative computed client-side, not a native AG Grid feature.
+- No cross-currency conversion; totals are always shown per original
+  currency.
