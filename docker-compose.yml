@@ -1,8 +1,8 @@
 services:
   paperless-insights:
-    build: .
-    # Or, once you've pushed an image somewhere:
-    # image: ghcr.io/<you>/paperless-insights:latest
+    image: ghcr.io/jwlay/paperless-insights:latest
+    # For local development instead of the published image:
+    # build: .
     restart: unless-stopped
     environment:
       # Optional: pre-fills the Paperless URL field on first connect.

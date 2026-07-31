@@ -60,16 +60,50 @@ cross-origin requests to your Paperless instance:
 
 ## Docker deployment
 
+### Quickstart (published image)
+
+Every push to `main` builds and publishes an image to GitHub Container
+Registry via `.github/workflows/docker-publish.yml` — `ghcr.io/jwlay/paperless-insights:latest`.
+On your VPS you don't need the source at all, just the compose file:
+
 ```bash
-cp .env.example .env   # set PAPERLESS_URL if you want it pre-filled
-docker compose build
+curl -O https://raw.githubusercontent.com/jwlay/paperless-insights/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/jwlay/paperless-insights/main/.env.example
+mv .env.example .env   # set PAPERLESS_URL if you want it pre-filled
+
+docker compose pull
 docker compose up -d
 ```
 
-This builds a static production bundle and serves it with nginx
-(`Dockerfile`, `docker/nginx.conf`). `docker/entrypoint.sh` regenerates
-`config.js` from `PAPERLESS_URL` at container start, so changing it only
-needs a container restart — not a rebuild.
+To update later: `docker compose pull && docker compose up -d`.
+
+Tags published by the workflow:
+
+| Tag | When |
+|---|---|
+| `latest` | Every push to `main` |
+| `vX.Y.Z` | Pushing a `vX.Y.Z` git tag (e.g. `git tag v1.0.0 && git push --tags`) |
+| `sha-<commit>` | Every build, for pinning to an exact commit |
+
+If pulling fails with a permission error the first time, the package may need
+its visibility set to public: repo → **Packages** → `paperless-insights` →
+Package settings → Change visibility. This is usually only needed once.
+
+### Building locally instead
+
+If you're developing against the Dockerfile itself rather than pulling the
+published image:
+
+```bash
+cp .env.example .env
+docker compose build   # uses the `build: .` line — see docker-compose.yml
+docker compose up -d
+```
+
+Either way, the image builds a static production bundle and serves it with
+nginx (`Dockerfile`, `docker/nginx.conf`). `docker/entrypoint.sh` regenerates
+`config.js` from `PAPERLESS_URL` at container start, so changing that env var
+only needs a container restart — not a rebuild or a re-pull.
 
 `docker-compose.yml` maps port `8080` by default and includes a commented-out
 Traefik + tinyauth label block as a starting point if you're running a
