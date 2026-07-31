@@ -21,6 +21,14 @@ import type { NormalizedDocument } from '@/models/document'
 import { isNumericDataType, type CustomFieldDef } from '@/parsing/customFields'
 import type { BuiltinDimensionKey, Dimension } from './aggregate'
 import type { ChartConfig, ChartVisual, Metric } from './chartConfig'
+import { buildChartOption } from './chartOptions'
+import { EChart } from './EChart'
+
+const previewAmountFormatter = new Intl.NumberFormat(undefined, {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+const previewCountFormatter = new Intl.NumberFormat(undefined)
 
 const BUILTIN_DIMENSIONS: { key: BuiltinDimensionKey; label: string }[] = [
   { key: 'correspondent', label: 'Correspondent' },
@@ -111,17 +119,34 @@ export function AddChartDialog({
     return `Each ${shape.slice(0, -1)} is one ${dimLabel.toLowerCase()}; its size is ${measured}.`
   })()
 
-  function handleAdd() {
-    const id = crypto.randomUUID()
-    onAdd({
-      id,
+  const draftConfig: ChartConfig = useMemo(
+    () => ({
+      id: 'preview',
       title: effectiveTitle,
       kind: 'grouped',
       dimension,
       metric: metric.kind === 'sum' ? { ...metric, currency } : metric,
       visual,
       limit: 10,
-    })
+    }),
+    [dimension, metric, currency, visual, effectiveTitle],
+  )
+
+  const previewOption = useMemo(
+    () =>
+      buildChartOption(
+        draftConfig,
+        docs,
+        customFieldDefs,
+        (v) => previewAmountFormatter.format(v),
+        (v) => previewCountFormatter.format(v),
+      ),
+    [draftConfig, docs, customFieldDefs],
+  )
+
+  function handleAdd() {
+    const id = crypto.randomUUID()
+    onAdd({ ...draftConfig, id })
     onOpenChange(false)
     setTitleTouched(false)
     setTitle('')
@@ -129,7 +154,7 @@ export function AddChartDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add chart</DialogTitle>
           <DialogDescription>
@@ -234,6 +259,19 @@ export function AddChartDialog({
 
           <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
             {previewSentence}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Preview</Label>
+            <div className="rounded-md border bg-card p-2">
+              {previewOption ? (
+                <EChart option={previewOption} height={200} />
+              ) : (
+                <p className="p-6 text-center text-sm text-muted-foreground">
+                  No data to preview yet — try a different field or measure.
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1.5">
