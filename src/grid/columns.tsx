@@ -35,7 +35,11 @@ function OpenLinkCellRenderer(params: ICellRendererParams<NormalizedDocument, st
       href={params.value}
       target="_blank"
       rel="noopener noreferrer"
-      className="font-medium text-primary underline underline-offset-2"
+      // Fixed color rather than the app's theme-flipping text-primary/dark:
+      // classes — AG Grid's own cell background doesn't reliably follow the
+      // app's dark-mode toggle, so a variable meant to contrast against the
+      // *app shell's* background can end up unreadable against the grid's.
+      className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
     >
       Open ↗
     </a>

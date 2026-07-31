@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConnectionSetup } from '@/components/ConnectionSetup'
 import { DocumentsGrid } from '@/components/DocumentsGrid'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { clearPaperlessConfig, getPaperlessConfig } from '@/lib/paperless-config'
+import { useIsDarkMode } from '@/lib/theme'
 import { DocumentsFilterProvider } from '@/context/DocumentsFilterContext'
 
 // ECharts is a large dependency — only load it when the Dashboard tab is actually opened.
@@ -16,6 +17,11 @@ const queryClient = new QueryClient()
 
 function App() {
   const [connected, setConnected] = useState(() => getPaperlessConfig() !== null)
+  const isDark = useIsDarkMode()
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark)
+  }, [isDark])
 
   if (!connected) {
     return <ConnectionSetup onConnected={() => setConnected(true)} />

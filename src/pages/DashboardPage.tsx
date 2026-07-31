@@ -4,10 +4,12 @@ import { useDocuments } from '@/api/queries'
 import { useDocumentsFilter } from '@/context/DocumentsFilterContext'
 import { buildChartOption } from '@/dashboard/chartOptions'
 import { getDefaultCharts, getSavedCharts, saveDashboardCharts, type ChartConfig } from '@/dashboard/chartConfig'
+import { getPalette } from '@/dashboard/colors'
 import { AddChartDialog } from '@/dashboard/AddChartDialog'
 import { EChart } from '@/dashboard/EChart'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { useIsDarkMode } from '@/lib/theme'
 
 const amountFormatter = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
@@ -45,6 +47,7 @@ function ChartCard({
 export function DashboardPage() {
   const { data, isLoading, error } = useDocuments()
   const { filteredDocuments } = useDocumentsFilter()
+  const palette = getPalette(useIsDarkMode())
   const [useSharedFilter, setUseSharedFilter] = useState(true)
   const [customCharts, setCustomCharts] = useState<ChartConfig[] | null>(() => getSavedCharts())
   const [addOpen, setAddOpen] = useState(false)
@@ -131,6 +134,7 @@ export function DashboardPage() {
             customFieldDefs,
             (v) => amountFormatter.format(v),
             (v) => countFormatter.format(v),
+            palette,
           )
           return (
             <ChartCard key={config.id} title={config.title} onRemove={() => removeChart(config.id)}>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact } from 'ag-grid-react'
-import { themeQuartz } from 'ag-grid-community'
+import { colorSchemeVariable, themeQuartz } from 'ag-grid-community'
 import type {
   ColDef,
   FilterChangedEvent,
@@ -20,7 +20,9 @@ import { ViewsMenu, type BuiltInViewId } from '@/components/ViewsMenu'
 import { useDocumentsFilter } from '@/context/DocumentsFilterContext'
 import { cn } from '@/lib/utils'
 
-const gridTheme = themeQuartz.withParams({
+// colorSchemeVariable follows prefers-color-scheme itself, in sync with the
+// .dark class this app toggles for the rest of the UI.
+const gridTheme = themeQuartz.withPart(colorSchemeVariable).withParams({
   accentColor: 'var(--primary)',
   borderRadius: 8,
   wrapperBorderRadius: 10,
@@ -132,8 +134,10 @@ export function DocumentsGrid() {
   )
 
   const getRowClass = useCallback(
+    // Fixed color, not a dark: variant — AG Grid's own background doesn't
+    // reliably follow the app's dark-mode toggle (see OpenLinkCellRenderer).
     (params: RowClassParams<NormalizedDocument>) =>
-      params.data?.hasMissingMetadata ? 'bg-amber-50 dark:bg-amber-950/40' : undefined,
+      params.data?.hasMissingMetadata ? 'bg-amber-50' : undefined,
     [],
   )
 

@@ -9,19 +9,19 @@ import {
   computeMissingFields,
 } from './aggregate'
 import type { ChartConfig } from './chartConfig'
-import { ACCENT, CATEGORICAL, CATEGORICAL_OTHER, INK, WARNING } from './colors'
-
-const baseAxis = {
-  axisLabel: { color: INK.muted },
-  axisLine: { lineStyle: { color: INK.axis } },
-}
+import type { ChartPalette } from './colors'
 
 export function rankedBarOption(
   items: { label: string; value: number }[],
   color: string,
   valueFormatter: (v: number) => string,
+  palette: ChartPalette,
 ): EChartsOption {
   const sorted = [...items].sort((a, b) => a.value - b.value)
+  const baseAxis = {
+    axisLabel: { color: palette.ink.muted },
+    axisLine: { lineStyle: { color: palette.ink.axis } },
+  }
   return {
     grid: { left: 8, right: 56, top: 8, bottom: 8, containLabel: true },
     tooltip: {
@@ -29,12 +29,12 @@ export function rankedBarOption(
       axisPointer: { type: 'shadow' },
       valueFormatter: (v) => valueFormatter(Number(v)),
     },
-    xAxis: { type: 'value', ...baseAxis, splitLine: { lineStyle: { color: INK.gridline } } },
+    xAxis: { type: 'value', ...baseAxis, splitLine: { lineStyle: { color: palette.ink.gridline } } },
     yAxis: {
       type: 'category',
       data: sorted.map((i) => i.label),
-      axisLabel: { color: INK.secondary, width: 140, overflow: 'truncate' },
-      axisLine: { lineStyle: { color: INK.axis } },
+      axisLabel: { color: palette.ink.secondary, width: 140, overflow: 'truncate' },
+      axisLine: { lineStyle: { color: palette.ink.axis } },
       splitLine: { show: false },
     },
     series: [
@@ -45,7 +45,7 @@ export function rankedBarOption(
         label: {
           show: true,
           position: 'right',
-          color: INK.primary,
+          color: palette.ink.primary,
           formatter: (p) => valueFormatter(Number(p.value)),
         },
         barMaxWidth: 20,
@@ -59,7 +59,12 @@ export function timeSeriesOption(
   color: string,
   kind: 'line' | 'bar',
   valueFormatter: (v: number) => string,
+  palette: ChartPalette,
 ): EChartsOption {
+  const baseAxis = {
+    axisLabel: { color: palette.ink.muted },
+    axisLine: { lineStyle: { color: palette.ink.axis } },
+  }
   return {
     grid: { left: 8, right: 16, top: 24, bottom: 8, containLabel: true },
     tooltip: { trigger: 'axis', valueFormatter: (v) => valueFormatter(Number(v)) },
@@ -69,7 +74,7 @@ export function timeSeriesOption(
       ...baseAxis,
       axisLabel: { ...baseAxis.axisLabel, rotate: points.length > 8 ? 45 : 0 },
     },
-    yAxis: { type: 'value', ...baseAxis, splitLine: { lineStyle: { color: INK.gridline } } },
+    yAxis: { type: 'value', ...baseAxis, splitLine: { lineStyle: { color: palette.ink.gridline } } },
     series: [
       kind === 'line'
         ? {
@@ -82,7 +87,7 @@ export function timeSeriesOption(
             endLabel: {
               show: true,
               formatter: (p) => valueFormatter(Number(p.value)),
-              color: INK.primary,
+              color: palette.ink.primary,
             },
           }
         : {
@@ -98,25 +103,31 @@ export function timeSeriesOption(
 // Pies are an "all slices visible at once" context, so only the first 3
 // categorical slots (validated all-pairs) are used — everything past that
 // folds into "Other" rather than generating an unvalidated 4th+ hue.
-export function pieOptionFromItems(items: { label: string; value: number }[]): EChartsOption {
+export function pieOptionFromItems(
+  items: { label: string; value: number }[],
+  palette: ChartPalette,
+): EChartsOption {
   const sorted = [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value)
   const top = sorted.slice(0, 3)
   const rest = sorted.slice(3)
   const restSum = rest.reduce((sum, i) => sum + i.value, 0)
   const data = top.map((i) => ({ name: i.label, value: i.value }))
   if (restSum > 0) data.push({ name: 'Other', value: restSum })
-  const colors = [...CATEGORICAL.slice(0, top.length), ...(restSum > 0 ? [CATEGORICAL_OTHER] : [])]
+  const colors = [
+    ...palette.categorical.slice(0, top.length),
+    ...(restSum > 0 ? [palette.categoricalOther] : []),
+  ]
   return {
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0, textStyle: { color: INK.secondary } },
+    legend: { bottom: 0, textStyle: { color: palette.ink.secondary } },
     series: [
       {
         type: 'pie',
         radius: ['45%', '70%'],
         data,
         color: colors,
-        itemStyle: { borderColor: '#fcfcfb', borderWidth: 2 },
-        label: { color: INK.secondary, formatter: '{b}: {c}' },
+        itemStyle: { borderColor: palette.surface, borderWidth: 2 },
+        label: { color: palette.ink.secondary, formatter: '{b}: {c}' },
       },
     ],
   }
@@ -128,6 +139,7 @@ export function buildChartOption(
   customFieldDefs: CustomFieldDef[],
   amountFormatter: (v: number) => string,
   countFormatter: (v: number) => string,
+  palette: ChartPalette,
 ): EChartsOption | null {
   switch (config.kind) {
     case 'largest-values': {
@@ -135,22 +147,27 @@ export function buildChartOption(
       if (entries.length === 0) return null
       return rankedBarOption(
         entries.map((e) => ({ label: e.label, value: e.value })),
-        ACCENT,
+        palette.accent,
         amountFormatter,
+        palette,
       )
     }
     case 'currency-distribution': {
       const dist = computeCurrencyDistribution(docs, config.fieldId)
       if (dist.length === 0) return null
-      return pieOptionFromItems(dist.map((d) => ({ label: d.currency, value: d.count })))
+      return pieOptionFromItems(
+        dist.map((d) => ({ label: d.currency, value: d.count })),
+        palette,
+      )
     }
     case 'added-over-time': {
       const points = computeAddedOverTime(docs)
       return timeSeriesOption(
         points.map((p) => ({ label: p.label, value: p.count })),
-        ACCENT,
+        palette.accent,
         'bar',
         countFormatter,
+        palette,
       )
     }
     case 'missing-fields': {
@@ -158,8 +175,9 @@ export function buildChartOption(
       if (reasons.length === 0) return null
       return rankedBarOption(
         reasons.map((r) => ({ label: r.label, value: r.count })),
-        WARNING,
+        palette.warning,
         countFormatter,
+        palette,
       )
     }
     case 'grouped': {
@@ -174,16 +192,16 @@ export function buildChartOption(
       const items = groups.map((g) => ({ label: g.label, value: isSum ? g.sum : g.count }))
 
       if (config.visual === 'pie') {
-        return pieOptionFromItems(items)
+        return pieOptionFromItems(items, palette)
       }
       if (config.visual === 'line') {
-        return timeSeriesOption(items, ACCENT, 'line', valueFormatter)
+        return timeSeriesOption(items, palette.accent, 'line', valueFormatter, palette)
       }
       const limited = items
         .filter((i) => i.value > 0)
         .sort((a, b) => b.value - a.value)
         .slice(0, config.limit ?? 10)
-      return rankedBarOption(limited, ACCENT, valueFormatter)
+      return rankedBarOption(limited, palette.accent, valueFormatter, palette)
     }
   }
 }

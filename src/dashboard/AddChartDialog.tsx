@@ -22,7 +22,9 @@ import { isNumericDataType, type CustomFieldDef } from '@/parsing/customFields'
 import type { BuiltinDimensionKey, Dimension } from './aggregate'
 import type { ChartConfig, ChartVisual, Metric } from './chartConfig'
 import { buildChartOption } from './chartOptions'
+import { getPalette } from './colors'
 import { EChart } from './EChart'
+import { useIsDarkMode } from '@/lib/theme'
 
 const previewAmountFormatter = new Intl.NumberFormat(undefined, {
   minimumFractionDigits: 2,
@@ -71,6 +73,8 @@ export function AddChartDialog({
   customFieldDefs: CustomFieldDef[]
   docs: NormalizedDocument[]
 }) {
+  const palette = getPalette(useIsDarkMode())
+
   const numericFields = useMemo(
     () => customFieldDefs.filter((f) => isNumericDataType(f.dataType)),
     [customFieldDefs],
@@ -140,8 +144,9 @@ export function AddChartDialog({
         customFieldDefs,
         (v) => previewAmountFormatter.format(v),
         (v) => previewCountFormatter.format(v),
+        palette,
       ),
-    [draftConfig, docs, customFieldDefs],
+    [draftConfig, docs, customFieldDefs, palette],
   )
 
   function handleAdd() {
