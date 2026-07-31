@@ -1,0 +1,27 @@
+services:
+  paperless-insights:
+    build: .
+    # Or, once you've pushed an image somewhere:
+    # image: ghcr.io/<you>/paperless-insights:latest
+    restart: unless-stopped
+    environment:
+      # Optional: pre-fills the Paperless URL field on first connect.
+      # Never put the API token here — see README.md for why.
+      PAPERLESS_URL: ${PAPERLESS_URL:-}
+    ports:
+      - "8080:80"
+
+    # --- Traefik + tinyauth example (matches a paperless-ngx + tinyauth setup) ---
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.paperless-insights.rule=Host(`paperless-insights.vps.example.com`)"
+    #   - "traefik.http.routers.paperless-insights.entrypoints=websecure"
+    #   - "traefik.http.routers.paperless-insights.tls.certresolver=<your-cert-resolver>"
+    #   - "traefik.http.routers.paperless-insights.middlewares=tinyauth@docker"
+    #   - "traefik.http.services.paperless-insights.loadbalancer.server.port=80"
+    # networks:
+    #   - proxy
+
+# networks:
+#   proxy:
+#     external: true
