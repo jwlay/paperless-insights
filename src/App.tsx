@@ -17,6 +17,7 @@ const queryClient = new QueryClient()
 
 function App() {
   const [connected, setConnected] = useState(() => getPaperlessConfig() !== null)
+  const [dashboardVisited, setDashboardVisited] = useState(false)
   const isDark = useIsDarkMode()
 
   useEffect(() => {
@@ -36,7 +37,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <DocumentsFilterProvider>
-        <Tabs defaultValue="documents" className="h-screen gap-0">
+        <Tabs
+          defaultValue="documents"
+          className="h-screen gap-0"
+          onValueChange={(value) => {
+            if (value === 'dashboard') setDashboardVisited(true)
+          }}
+        >
           <header className="flex items-center justify-between border-b px-4 py-3">
             <span className="text-lg font-semibold">Paperless Insights</span>
             <TabsList>
@@ -47,10 +54,18 @@ function App() {
               Disconnect
             </Button>
           </header>
-          <TabsContent value="documents" className="min-h-0">
+          {/* forceMount + data-state styling, not conditional rendering — so
+              switching tabs doesn't unmount DocumentsGrid, which would throw
+              away AG Grid's own filter/sort state (not tracked in our React
+              state, so it can't be restored on remount otherwise). */}
+          <TabsContent value="documents" forceMount className="min-h-0 data-[state=inactive]:hidden">
             <DocumentsGrid />
           </TabsContent>
-          <TabsContent value="dashboard" className="min-h-0">
+          <TabsContent
+            value="dashboard"
+            forceMount={dashboardVisited ? true : undefined}
+            className="min-h-0 data-[state=inactive]:hidden"
+          >
             <Suspense
               fallback={<div className="p-6 text-sm text-muted-foreground">Loading dashboard…</div>}
             >
