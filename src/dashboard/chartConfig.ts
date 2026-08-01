@@ -115,7 +115,10 @@ export function getDefaultCharts(customFieldDefs: CustomFieldDef[], docs: Normal
       kind: 'grouped',
       dimension: { kind: 'builtin', key: 'documentType' },
       metric: { kind: 'count' },
-      visual: 'pie',
+      // Bar rather than pie — a pie folds to top-3 + Other, which loses
+      // detail for anyone with more than a few document types defined.
+      visual: 'bar',
+      limit: 10,
     },
     { id: 'default-added-over-time', title: 'Documents added over time', kind: 'added-over-time' },
     { id: 'default-activity-calendar', title: 'Activity calendar', kind: 'activity-calendar', field: 'added' },

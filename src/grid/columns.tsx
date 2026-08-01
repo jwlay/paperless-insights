@@ -74,7 +74,6 @@ export function buildDocumentColumnDefs(customFieldDefs: CustomFieldDef[]): ColD
     { field: 'createdDate', headerName: 'Date', sort: 'desc', filter: 'agDateColumnFilter', width: 130 },
     { field: 'title', headerName: 'Title', flex: 2, minWidth: 220 },
     { field: 'correspondent', headerName: 'Correspondent', flex: 1, minWidth: 160 },
-    ...customFieldDefs.map(customFieldColumn),
     {
       field: 'tags',
       headerName: 'Tags',
@@ -93,6 +92,10 @@ export function buildDocumentColumnDefs(customFieldDefs: CustomFieldDef[]): ColD
     { field: 'storagePath', headerName: 'Storage Path', flex: 1, minWidth: 130 },
     { field: 'pageCount', headerName: 'Pages', width: 90 },
     { field: 'originalFileName', headerName: 'Original Filename', flex: 1, minWidth: 200 },
+    // Custom fields vary per Paperless instance, so they go after the
+    // metadata every user has, not sandwiched in the middle pushing
+    // universal columns further right the more custom fields someone has.
+    ...customFieldDefs.map(customFieldColumn),
     {
       field: 'paperlessUrl',
       headerName: '',

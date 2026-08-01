@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowDown, ArrowUp, Pencil, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Pencil, X } from 'lucide-react'
 import { useDocuments } from '@/api/queries'
 import { useDocumentsFilter } from '@/context/DocumentsFilterContext'
 import { buildChartOption } from '@/dashboard/chartOptions'
@@ -27,6 +27,8 @@ const amountFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 })
 const countFormatter = new Intl.NumberFormat(undefined)
+
+const INSIGHTS_VISIBLE_KEY = 'paperless-insights:show-insights'
 
 function isWideChart(config: ChartConfig): boolean {
   return config.kind === 'activity-calendar' || config.kind === 'stacked-bar'
@@ -118,7 +120,7 @@ function DocumentListCard({
           {documents.map((doc) => (
             <li key={doc.id} className="flex items-center justify-between gap-2 py-1.5">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{doc.title}</p>
+                <p className="line-clamp-2 text-sm font-medium">{doc.title}</p>
                 <p className="truncate text-xs text-muted-foreground">{renderMeta(doc)}</p>
               </div>
               <a
@@ -145,6 +147,9 @@ export function DashboardPage() {
   const [customCharts, setCustomCharts] = useState<ChartConfig[] | null>(() => getSavedCharts())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChart, setEditingChart] = useState<ChartConfig | null>(null)
+  const [showInsights, setShowInsights] = useState(
+    () => localStorage.getItem(INSIGHTS_VISIBLE_KEY) !== 'false',
+  )
 
   const allDocs = data?.documents ?? []
   const customFieldDefs = data?.customFieldDefs ?? []
@@ -192,6 +197,14 @@ export function DashboardPage() {
     setDialogOpen(true)
   }
 
+  function toggleInsights() {
+    setShowInsights((prev) => {
+      const next = !prev
+      localStorage.setItem(INSIGHTS_VISIBLE_KEY, String(next))
+      return next
+    })
+  }
+
   if (error) {
     return <div className="p-6 text-destructive">Failed to load documents: {error.message}</div>
   }
@@ -222,31 +235,47 @@ export function DashboardPage() {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <DocumentListCard
-          title="Recently added"
-          documents={computeRecentDocuments(docs, 'addedDate', 8)}
-          renderMeta={(doc) =>
-            `${doc.correspondent ?? 'No correspondent'} · added ${doc.addedDate?.slice(0, 10) ?? '—'}`
-          }
-          emptyText="No documents yet."
-        />
-        <DocumentListCard
-          title="Recently modified"
-          documents={computeRecentDocuments(docs, 'modifiedDate', 8)}
-          renderMeta={(doc) =>
-            `${doc.correspondent ?? 'No correspondent'} · modified ${doc.modifiedDate?.slice(0, 10) ?? '—'}`
-          }
-          emptyText="No documents yet."
-        />
-        <DocumentListCard
-          title="Potential duplicates"
-          documents={computeDuplicateDocuments(docs)}
-          renderMeta={(doc) =>
-            `${doc.duplicateDocumentIds.length} possible duplicate${doc.duplicateDocumentIds.length === 1 ? '' : 's'} (flagged by Paperless)`
-          }
-          emptyText="No duplicates flagged by Paperless."
-        />
+      <div>
+        <button
+          type="button"
+          onClick={toggleInsights}
+          className="mb-2 flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          {showInsights ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          Insights
+        </button>
+        {showInsights && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <DocumentListCard
+              title="Recently added"
+              documents={computeRecentDocuments(docs, 'addedDate', 8)}
+              renderMeta={(doc) =>
+                `${doc.correspondent ?? 'No correspondent'} · added ${doc.addedDate?.slice(0, 10) ?? '—'}`
+              }
+              emptyText="No documents yet."
+            />
+            <DocumentListCard
+              title="Recently modified"
+              documents={computeRecentDocuments(docs, 'modifiedDate', 8)}
+              renderMeta={(doc) =>
+                `${doc.correspondent ?? 'No correspondent'} · modified ${doc.modifiedDate?.slice(0, 10) ?? '—'}`
+              }
+              emptyText="No documents yet."
+            />
+            <DocumentListCard
+              title="Potential duplicates"
+              documents={computeDuplicateDocuments(docs)}
+              renderMeta={(doc) =>
+                `${doc.duplicateDocumentIds.length} possible duplicate${doc.duplicateDocumentIds.length === 1 ? '' : 's'} (flagged by Paperless)`
+              }
+              emptyText="No duplicates flagged by Paperless."
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

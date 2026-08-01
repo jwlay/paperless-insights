@@ -32,7 +32,14 @@ export function rankedBarOption(
       axisPointer: { type: 'shadow' },
       valueFormatter: (v) => valueFormatter(Number(v)),
     },
-    xAxis: { type: 'value', ...baseAxis, splitLine: { lineStyle: { color: palette.ink.gridline } } },
+    xAxis: {
+      type: 'value',
+      // Without headroom, the longest bar's end-label sits exactly on the
+      // plot edge and gets clipped instead of shown — always leave room.
+      max: (value: { max: number }) => (value.max <= 0 ? 1 : Math.ceil(value.max * 1.15)),
+      ...baseAxis,
+      splitLine: { lineStyle: { color: palette.ink.gridline } },
+    },
     yAxis: {
       type: 'category',
       data: sorted.map((i) => i.label),
