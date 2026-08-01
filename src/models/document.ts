@@ -13,6 +13,7 @@ export interface NormalizedDocument {
   title: string
   createdDate: string | null
   addedDate: string | null
+  modifiedDate: string | null
   correspondent: string | null
   documentType: string | null
   storagePath: string | null
@@ -23,6 +24,7 @@ export interface NormalizedDocument {
   hasMissingMetadata: boolean
   missingFields: string[]
   customFields: ParsedCustomFieldValue[]
+  duplicateDocumentIds: number[]
 }
 
 export interface DocumentLookups {
@@ -65,6 +67,7 @@ export function toNormalizedDocument(
     title: doc.title,
     createdDate: doc.created,
     addedDate: doc.added,
+    modifiedDate: doc.modified,
     correspondent,
     documentType,
     storagePath,
@@ -75,5 +78,6 @@ export function toNormalizedDocument(
     hasMissingMetadata: missingFields.length > 0,
     missingFields,
     customFields,
+    duplicateDocumentIds: doc.duplicate_documents,
   }
 }

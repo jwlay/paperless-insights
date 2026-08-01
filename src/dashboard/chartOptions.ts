@@ -4,9 +4,12 @@ import type { CustomFieldDef } from '@/parsing/customFields'
 import {
   computeAddedOverTime,
   computeCurrencyDistribution,
+  computeDailyActivity,
   computeGroups,
   computeLargestValues,
   computeMissingFields,
+  computeStackedGroups,
+  type StackedGroups,
 } from './aggregate'
 import type { ChartConfig } from './chartConfig'
 import type { ChartPalette } from './colors'
@@ -133,6 +136,98 @@ export function pieOptionFromItems(
   }
 }
 
+// A stacked bar has every segment visible at once (same as a pie), so the
+// stack dimension is already capped to top-3 + "Other" by computeStackedGroups.
+export function stackedBarOption(
+  data: StackedGroups,
+  valueFormatter: (v: number) => string,
+  palette: ChartPalette,
+): EChartsOption {
+  const hasOther = data.series.some((s) => s.name === 'Other')
+  const namedCount = hasOther ? data.series.length - 1 : data.series.length
+  const seriesColors = [
+    ...palette.categorical.slice(0, namedCount),
+    ...(hasOther ? [palette.categoricalOther] : []),
+  ]
+  return {
+    grid: { left: 8, right: 16, top: 32, bottom: 8, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      valueFormatter: (v) => valueFormatter(Number(v)),
+    },
+    legend: { top: 0, textStyle: { color: palette.ink.secondary } },
+    xAxis: {
+      type: 'category',
+      data: data.categories,
+      axisLabel: {
+        color: palette.ink.muted,
+        rotate: data.categories.length > 6 ? 30 : 0,
+        width: 100,
+        overflow: 'truncate',
+      },
+      axisLine: { lineStyle: { color: palette.ink.axis } },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: palette.ink.muted },
+      splitLine: { lineStyle: { color: palette.ink.gridline } },
+    },
+    series: data.series.map((s, i) => ({
+      name: s.name,
+      type: 'bar',
+      stack: 'total',
+      data: s.data,
+      itemStyle: { color: seriesColors[i] },
+    })),
+  }
+}
+
+// GitHub-style contribution calendar over the trailing 12 months of data.
+export function calendarHeatmapOption(
+  points: { date: string; count: number }[],
+  palette: ChartPalette,
+): EChartsOption {
+  const maxDate = points[points.length - 1].date
+  const start = new Date(maxDate)
+  start.setDate(start.getDate() - 364)
+  const startDate = start.toISOString().slice(0, 10)
+  const maxCount = Math.max(...points.map((p) => p.count), 1)
+
+  return {
+    tooltip: { position: 'top' },
+    visualMap: {
+      min: 0,
+      max: maxCount,
+      calculable: false,
+      orient: 'horizontal',
+      left: 'center',
+      top: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { color: palette.ink.muted, fontSize: 10 },
+      inRange: { color: [palette.surface, palette.accent] },
+    },
+    calendar: {
+      top: 40,
+      range: [startDate, maxDate],
+      cellSize: [16, 16],
+      itemStyle: { borderWidth: 2, borderColor: palette.surface, color: palette.ink.gridline },
+      dayLabel: { color: palette.ink.muted, fontSize: 10 },
+      monthLabel: { color: palette.ink.muted, fontSize: 10 },
+      yearLabel: { show: false },
+      splitLine: { show: false },
+    },
+    series: [
+      {
+        type: 'heatmap',
+        coordinateSystem: 'calendar',
+        data: points.map((p) => [p.date, p.count]),
+      },
+    ],
+  }
+}
+
 export function buildChartOption(
   config: ChartConfig,
   docs: NormalizedDocument[],
@@ -202,6 +297,23 @@ export function buildChartOption(
         .sort((a, b) => b.value - a.value)
         .slice(0, config.limit ?? 10)
       return rankedBarOption(limited, palette.accent, valueFormatter, palette)
+    }
+    case 'stacked-bar': {
+      const metric = config.metric
+      const isSum = metric.kind === 'sum'
+      const data = computeStackedGroups(
+        docs,
+        config.primary,
+        config.stack,
+        isSum ? { fieldId: metric.fieldId, currency: metric.currency } : undefined,
+      )
+      if (data.categories.length === 0) return null
+      return stackedBarOption(data, isSum ? amountFormatter : countFormatter, palette)
+    }
+    case 'activity-calendar': {
+      const points = computeDailyActivity(docs, config.field)
+      if (points.length === 0) return null
+      return calendarHeatmapOption(points, palette)
     }
   }
 }

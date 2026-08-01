@@ -38,19 +38,26 @@ only in that browser's `localStorage`. Nothing is sent anywhere else.
   saved view, same search, same column filters — with a banner making it
   explicit when you're looking at a filtered subset rather than everything,
   and a one-click toggle back to all documents
-- **Dashboard charts are fully customizable and field-driven**: add a chart
-  by picking what to group by (any built-in field — correspondent, tag,
-  document type, storage path, year, month — or any custom field you've
+- **Dashboard charts are fully customizable, editable, and reorderable**: add
+  a chart by picking what to group by (any built-in field — correspondent,
+  tag, document type, storage path, year, month — or any custom field you've
   defined), what to measure (document count, or the sum of any numeric
-  custom field), and a visual (bar/line/pie). A live preview sentence spells
-  out what the chart will show before you add it. Ships with a handful of
-  general defaults (documents by correspondent/tag/type, added over time,
-  missing metadata); if a monetary custom field exists, matching
+  custom field), and a visual — bar, line, pie, a two-dimension stacked bar,
+  or a GitHub-style activity calendar heatmap. A live chart preview and a
+  plain-English summary sentence show exactly what you're about to get
+  before you add it. Existing charts can be edited (same dialog, pre-filled)
+  or reordered, not just added/removed. Ships with a handful of general
+  defaults (documents by correspondent/tag/type, added over time, activity
+  calendar, missing metadata); if a monetary custom field exists, matching
   money-flavored defaults (monthly totals, largest values, currency
   distribution) appear automatically alongside them
+- Always-on dashboard widgets pulled straight from Paperless: recently added
+  documents, recently modified documents, and potential duplicates (using
+  Paperless's own duplicate detection, not re-implemented here)
 - Tag pills rendered with their actual Paperless colors
 - Preserves original currencies — no forced conversion; any chart or total
   based on a monetary field is scoped to one currency at a time
+- Dark mode, following your OS/browser preference automatically
 
 ## Local development
 

@@ -42,12 +42,30 @@ export interface MissingFieldsChartConfig {
   kind: 'missing-fields'
 }
 
+export interface StackedBarChartConfig {
+  id: string
+  title: string
+  kind: 'stacked-bar'
+  primary: Dimension
+  stack: Dimension
+  metric: Metric
+}
+
+export interface ActivityCalendarChartConfig {
+  id: string
+  title: string
+  kind: 'activity-calendar'
+  field: 'added' | 'created'
+}
+
 export type ChartConfig =
   | GroupedChartConfig
   | LargestValuesChartConfig
   | CurrencyDistributionChartConfig
   | AddedOverTimeChartConfig
   | MissingFieldsChartConfig
+  | StackedBarChartConfig
+  | ActivityCalendarChartConfig
 
 function mostCommonCurrency(docs: NormalizedDocument[], fieldId: number): string | null {
   const counts = new Map<string, number>()
@@ -100,6 +118,7 @@ export function getDefaultCharts(customFieldDefs: CustomFieldDef[], docs: Normal
       visual: 'pie',
     },
     { id: 'default-added-over-time', title: 'Documents added over time', kind: 'added-over-time' },
+    { id: 'default-activity-calendar', title: 'Activity calendar', kind: 'activity-calendar', field: 'added' },
     { id: 'default-missing-fields', title: 'Missing metadata', kind: 'missing-fields' },
   ]
 
